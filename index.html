@@ -578,6 +578,17 @@ function renderCharts() {
 }
 
 // ── Gap chart ─────────────────────────────────────────────────
+// Use real API gap (Ecart1er): gap between teams = other.gap1st - ref.gap1st
+// Positive = other team is behind us; Negative = other team is ahead
+function calcRealGap(teamLaps, refLaps) {
+  return teamLaps.map(lap => {
+    const refLap = refLaps.find(l => l.lap === lap.lap);
+    const refGap = refLap ? (refLap.gap1st || 0) : 0;
+    const myGap  = lap.gap1st || 0;
+    return { x: lap.lap, y: +(myGap - refGap).toFixed(3) };
+  });
+}
+
 function buildRefTeamBar(active) {
   const bar = document.getElementById('ref-team-bar');
   if (!bar) return;
@@ -611,7 +622,7 @@ function renderGapChart(active) {
     .map(num => {
       const col = colorForTeam(num);
       const td = teamData[num];
-      const pts = calcCumulativeGap(td.laps, refLaps);
+      const pts = calcRealGap(td.laps, refLaps);
       return {
         label: `#${num} ${td.name.split(' ').pop()}`,
         data: pts,
@@ -754,20 +765,26 @@ function updateLapHistory(data) {
       }
     };
 
+    const gap1stRaw = cleanVal(r[C.gap]);
+    const gap1st = parseFloat(gap1stRaw) || 0; // seconds behind leader
+
     if (firstSeen && lapCount > 0) {
       const bestStr = cleanVal(r[C.bestLap]);
       const timeSec = parseTime(bestStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString() });
+        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), gap1st });
       }
     } else if (lapCount > prev && lapCount > 0) {
       const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
         ? lastLapStr : cleanVal(r[C.bestLap]);
       const timeSec = parseTime(timeStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString() });
+        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), gap1st });
       }
     }
+
+    // always update latest gap on the team record for live display
+    teamData[num].latestGap1st = gap1st;
 
     prevLapCount[num] = lapCount;
   });

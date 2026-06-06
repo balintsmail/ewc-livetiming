@@ -710,11 +710,15 @@ function rebuildGapHistory() {
     td.laps.forEach(l => { l.gap1st = null; });
     td.latestGap1st = null;
   });
-  // One entry per lap per team with timestamp
+  // Reset all stored gap1st values — they may be stale/wrong
+  // gap chart will rebuild from lap time differences (cumulative)
+  // and new live laps will bring correct category gaps going forward
   Object.entries(teamData).forEach(([num, td]) => {
+    td.laps.forEach(l => { l.gap1st = null; });
+    td.latestGap1st = null;
     gapHistory[num] = td.laps.map(l => ({
       lap: l.lap,
-      gap: l.gap1st ?? null,
+      gap: null,
       t: l.tsMs || tsToMs(l.ts) || null
     }));
   });

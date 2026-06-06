@@ -596,10 +596,9 @@ function calcRealGap(numOther, numRef) {
   const refLaps   = teamData[numRef]?.laps   || [];
 
   const result = [];
-  let lastKnownGap = null;
+  let lastKnownGap = 0; // start at 0 — accumulate from first lap
 
   for (const pt of otherHist) {
-    // Find closest ref entry by lap
     const refPt = refHist.reduce((best, r) =>
       Math.abs(r.lap - pt.lap) < Math.abs(best.lap - pt.lap) ? r : best,
       refHist[0] || { lap: 0, gap: null }
@@ -607,22 +606,37 @@ function calcRealGap(numOther, numRef) {
     const refGap = refPt?.gap ?? null;
 
     if (pt.gap !== null && refGap !== null) {
-      // Both have valid API gaps — use them directly
+      // Valid API gaps — use directly
       lastKnownGap = +(pt.gap - refGap).toFixed(3);
       result.push({ x: pt.lap, y: lastKnownGap });
-    } else if (lastKnownGap !== null) {
-      // One side has no API gap — estimate using lap time differences
+    } else {
+      // No API gap — accumulate from lap time difference
       const otherLap = otherLaps.find(l => l.lap === pt.lap);
       const refLap   = refLaps.find(l => l.lap === pt.lap);
       if (otherLap?.timeSec && refLap?.timeSec) {
         lastKnownGap = +(lastKnownGap + (otherLap.timeSec - refLap.timeSec)).toFixed(3);
         result.push({ x: pt.lap, y: lastKnownGap });
       }
-      // else skip this point (no lap time to estimate from)
     }
-    // else: no previous known gap and no API gap → skip
   }
   return result;
+}
+
+// ── Rebuild gap history from lap times ───────────────────────
+function rebuildGapHistory() {
+  Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
+  Object.values(teamData).forEach(td => {
+    td.laps.forEach(l => { l.gap1st = null; });
+    td.latestGap1st = null;
+  });
+  // One null-gap entry per lap per team → calcRealGap accumulates from lap times
+  Object.entries(teamData).forEach(([num, td]) => {
+    gapHistory[num] = td.laps.map(l => ({ lap: l.lap, gap: null }));
+  });
+  saveToStorage();
+  buildTeamFilterBar();
+  renderCharts();
+  console.log('Gap history rebuilt from lap times for', Object.keys(teamData).length, 'teams');
 }
 
 function buildRefTeamBar(active) {

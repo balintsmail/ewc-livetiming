@@ -345,9 +345,8 @@ function catColor(cat) {
 }
 
 function colorForTeam(num) {
-  if (!teamColors[num]) {
-    teamColors[num] = FIXED_COLORS[num] || PALETTE[Object.keys(teamColors).length % PALETTE.length];
-  }
+  if (FIXED_COLORS[num]) return (teamColors[num] = FIXED_COLORS[num]);
+  if (!teamColors[num]) teamColors[num] = PALETTE[Object.keys(teamColors).length % PALETTE.length];
   return teamColors[num];
 }
 

@@ -324,52 +324,96 @@ function buildTeamFilterBar() {
   });
 }
 
+// ── Moving average helpers ────────────────────────────────────
+function markInOutLaps(laps) {
+  if (!laps.length) return;
+  const validTimes = laps.map(l => l.timeSec).filter(Boolean);
+  const best = Math.min(...validTimes);
+  // exclude laps more than 8% slower than best (in/out laps)
+  laps.forEach(l => { l.excluded = l.timeSec > best * 1.08; });
+}
+
+function movingAvg(laps, window = 10) {
+  return laps.map((_, i) => {
+    const start = Math.max(0, i - window + 1);
+    const valid = laps.slice(start, i + 1).filter(l => !l.excluded && l.timeSec);
+    return valid.length ? valid.reduce((a, b) => a + b.timeSec, 0) / valid.length : null;
+  });
+}
+
 // ── Lap time chart ───────────────────────────────────────────
 function renderCharts() {
   const active = [...activeTeams].filter(n => teamData[n]);
   if (!active.length) return;
 
-  // Build unified x-axis: all lap numbers across active teams
   const maxLap = Math.max(...active.map(n => teamData[n].laps.length));
   if (maxLap === 0) return;
 
-  const datasets = active.map(num => {
+  const datasets = [];
+
+  active.forEach(num => {
     const td = teamData[num];
     const col = colorForTeam(num);
-    // x = lap index (1-based), y = timeSec
-    const pts = td.laps.map((l, i) => ({ x: l.lap, y: l.timeSec }));
-    return {
-      label: `#${num} ${td.name.split(' ').pop()}`,
-      data: pts,
-      borderColor: col,
-      backgroundColor: col + '33',
-      tension: 0.3,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      fill: false,
-    };
-  });
+    const label = `#${num} ${td.name.split(' ').pop()}`;
 
-  // all lap numbers present
-  const allLaps = [...new Set(active.flatMap(n => teamData[n].laps.map(l => l.lap)))].sort((a,b)=>a-b);
+    markInOutLaps(td.laps);
+    const avgs = movingAvg(td.laps, 10);
+
+    // Scatter: individual lap dots
+    datasets.push({
+      type: 'scatter',
+      label: label,
+      data: td.laps.map(l => ({ x: l.lap, y: l.timeSec, excluded: l.excluded, lap: l })),
+      backgroundColor: td.laps.map(l => l.excluded ? '#555' : col + 'cc'),
+      pointRadius: td.laps.map(l => l.excluded ? 3 : 5),
+      pointHoverRadius: 7,
+      showLine: false,
+      parsing: false,
+    });
+
+    // Line: 10-lap moving average
+    const avgPts = td.laps
+      .map((l, i) => avgs[i] !== null ? { x: l.lap, y: avgs[i] } : null)
+      .filter(Boolean);
+    datasets.push({
+      type: 'line',
+      label: `_avg_${num}`,   // prefixed with _ to hide from legend
+      data: avgPts,
+      borderColor: col,
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      tension: 0.4,
+      pointRadius: 0,
+      fill: false,
+      parsing: false,
+    });
+  });
 
   if (lapChart) lapChart.destroy();
   lapChart = new Chart(document.getElementById('chart-laptimes'), {
-    type: 'line',
+    type: 'scatter',
     data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       animation: false,
       parsing: false,
       plugins: {
-        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        legend: {
+          labels: {
+            color: '#ccc', font: { size: 11 }, boxWidth: 14,
+            filter: item => !item.text.startsWith('_avg_')
+          }
+        },
         tooltip: {
           callbacks: {
             label: ctx => {
-              const num = active[ctx.datasetIndex];
-              const td = teamData[num];
-              const lap = td.laps.find(l => l.lap === ctx.parsed.x);
-              return ` ${ctx.dataset.label}: ${lap ? lap.timeStr : secToStr(ctx.parsed.y)}${lap ? '  (' + lap.initials + ')' : ''}`;
+              if (ctx.dataset.label.startsWith('_avg_')) {
+                return ` 10-lap avg: ${secToStr(ctx.parsed.y)}`;
+              }
+              const d = ctx.raw;
+              const l = d.lap;
+              const excl = d.excluded ? ' ⚠ in/out' : '';
+              return ` ${ctx.dataset.label}  Lap ${l.lap}: ${l.timeStr || secToStr(ctx.parsed.y)} (${l.initials})${excl}`;
             }
           }
         }

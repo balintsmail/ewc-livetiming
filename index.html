@@ -119,6 +119,11 @@
     <div>Time: <b id="clock">--:--:--</b></div>
     <div>Remaining: <b id="remaining">--:--:--</b></div>
     <div>Updated: <b id="last-update">—</b></div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <select id="session-picker" onchange="switchToSession(this.value)"
+        style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:2px 6px;border-radius:4px;font-size:11px;max-width:220px">
+      </select>
+    </div>
   </div>
 </header>
 
@@ -981,59 +986,92 @@ async function fetchData() {
   }
 }
 
-// ── LocalStorage persistence ──────────────────────────────────
-const STORAGE_KEY = 'ewc_timing_state';
+// ── LocalStorage persistence (per session, permanent) ─────────
+const SESSIONS_INDEX_KEY = 'ewc_sessions';
+let activeSessionKey = null;
+
+function sessionKey(title) { return 'ewc_session_' + title.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+function getSessions() {
+  try { return JSON.parse(localStorage.getItem(SESSIONS_INDEX_KEY) || '[]'); } catch(e) { return []; }
+}
 
 function saveToStorage() {
+  if (!rawData?.Titre) return;
+  const title = rawData.Titre;
+  activeSessionKey = sessionKey(title);
   try {
-    const state = {
-      sessionTitle: rawData?.Titre || '',
-      teamData,
-      prevLapCount,
-      prevPitCount,
-      sentLaps: [...sentLaps],
-      teamColors,
-      savedAt: Date.now(),
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
+                    sentLaps: [...sentLaps], teamColors, savedAt: Date.now() };
+    localStorage.setItem(activeSessionKey, JSON.stringify(state));
+    // Update sessions index
+    const sessions = getSessions();
+    if (!sessions.find(s => s.key === activeSessionKey)) {
+      sessions.unshift({ key: activeSessionKey, title, date: new Date().toLocaleDateString() });
+      localStorage.setItem(SESSIONS_INDEX_KEY, JSON.stringify(sessions));
+      buildSessionPicker();
+    }
   } catch(e) { console.warn('Storage save failed:', e); }
 }
 
-function loadFromStorage() {
+function loadSessionData(key) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
     const state = JSON.parse(raw);
-    // Don't restore if saved more than 8 hours ago
-    if (Date.now() - state.savedAt > 8 * 3600 * 1000) {
-      localStorage.removeItem(STORAGE_KEY); return;
-    }
-    // Restore state
+    Object.keys(teamData).forEach(k => delete teamData[k]);
+    Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
+    Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
+    sentLaps.clear();
     Object.assign(teamData, state.teamData || {});
     Object.assign(prevLapCount, state.prevLapCount || {});
     Object.assign(prevPitCount, state.prevPitCount || {});
     Object.assign(teamColors, state.teamColors || {});
     (state.sentLaps || []).forEach(k => sentLaps.add(k));
-    console.log(`Restored ${Object.keys(teamData).length} teams from storage (session: ${state.sessionTitle})`);
+    console.log(`Loaded session: ${state.sessionTitle} (${Object.keys(teamData).length} teams)`);
     return state.sessionTitle;
-  } catch(e) { console.warn('Storage load failed:', e); }
+  } catch(e) { console.warn('Storage load failed:', e); return false; }
+}
+
+function loadFromStorage() {
+  // Try to find the most recent session and load it
+  const sessions = getSessions();
+  if (!sessions.length) return null;
+  const latest = sessions[0];
+  activeSessionKey = latest.key;
+  return loadSessionData(latest.key);
+}
+
+function switchToSession(key) {
+  loadSessionData(key);
+  activeSessionKey = key;
+  buildTeamFilterBar();
+  buildStintFilterBar();
+  renderCharts();
+  renderStandings(rawData || { Donnees: [] });
+}
+
+function buildSessionPicker() {
+  const sessions = getSessions();
+  const picker = document.getElementById('session-picker');
+  if (!picker) return;
+  picker.innerHTML = sessions.map(s =>
+    `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${s.title} (${s.date})</option>`
+  ).join('');
 }
 
 function clearStorageIfSessionChanged(newTitle) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const state = JSON.parse(raw);
-    if (state.sessionTitle && newTitle && state.sessionTitle !== newTitle) {
-      console.log(`Session changed (${state.sessionTitle} → ${newTitle}), clearing stored laps`);
-      localStorage.removeItem(STORAGE_KEY);
-      // Reset in-memory state too
-      Object.keys(teamData).forEach(k => delete teamData[k]);
-      Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
-      Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
-      sentLaps.clear();
-    }
-  } catch(e) {}
+  // Don't clear — just save under a new session key. Sessions are preserved.
+  // When title changes, a new session key is used automatically in saveToStorage.
+  // But we DO need to reset in-memory tracking if session changes mid-run
+  const newKey = sessionKey(newTitle);
+  if (activeSessionKey && newKey !== activeSessionKey) {
+    console.log(`Session switched to: ${newTitle}`);
+    Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
+    Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
+    sentLaps.clear();
+    // Keep teamData from old session unless it conflicts
+  }
 }
 
 // ── Load history from Google Sheets ──────────────────────────
@@ -1084,7 +1122,8 @@ async function loadFromSheets() {
 
 // ── Init ──────────────────────────────────────────────────────
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
-const storedTitle = loadFromStorage();
+loadFromStorage();
+buildSessionPicker();
 
 // If nothing in storage, try loading from Sheets before first fetch
 if (!Object.keys(teamData).length) {

@@ -199,6 +199,11 @@
   </div>
 
   <div class="chart-card">
+    <h3>Lap Times by Clock Time</h3>
+    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes-time"></canvas></div>
+  </div>
+
+  <div class="chart-card">
     <h3>Lap Time Table</h3>
     <div id="lap-table-wrap">
       <table id="lap-table">
@@ -300,6 +305,7 @@ let rawData = null;
 let currentFilter = 'Overall';
 let lapChart = null;
 let gapChart = null;
+let lapTimesTimeChart = null;
 // gapHistory[num] = [{lap, gap}] — recorded every poll, independent of lap completion
 const gapHistory = {};
 let stintChart = null;
@@ -650,6 +656,7 @@ function renderCharts() {
   if (!refTeam || !activeTeams.has(refTeam)) refTeam = active[0];
   buildRefTeamBar(active);
   renderGapChart(active);
+  renderLapTimesTimeChart(active);
   renderLapTable(active);
 }
 
@@ -909,6 +916,74 @@ function renderGapChart(active) {
       }
     },
     plugins: [pitLabelPlugin],
+  });
+}
+
+// ── Lap times by clock time chart ───────────────────────────
+function renderLapTimesTimeChart(active) {
+  const datasets = active.map(num => {
+    const td = teamData[num];
+    const col = colorForTeam(num);
+    const pts = td.laps
+      .map(l => {
+        const t = l.tsMs || tsToMs(l.ts);
+        if (!t) return null;
+        return { x: t, y: l.timeSec, lap: l };
+      })
+      .filter(Boolean);
+    return {
+      type: 'scatter',
+      label: teamLabel(num),
+      data: pts,
+      backgroundColor: td.laps.map(l => (l.excluded ? '#555' : col + 'cc')),
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      parsing: false,
+    };
+  });
+
+  const yMin = 140, yMax = 176;
+
+  if (lapTimesTimeChart) lapTimesTimeChart.destroy();
+  lapTimesTimeChart = new Chart(document.getElementById('chart-laptimes-time'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+      plugins: {
+        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const l = ctx.raw?.lap;
+              if (!l) return '';
+              const t = ctx.raw.x > 1e12
+                ? new Date(ctx.raw.x).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+                : '';
+              return ` ${ctx.dataset.label}  L${l.lap}: ${l.timeStr} ${t ? '@ '+t : ''}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: {
+            color: '#888',
+            maxTicksLimit: 16,
+            callback: v => v > 1e12 ? new Date(v).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : v
+          },
+          grid: { color: '#222' },
+          title: { display: true, text: 'Clock Time', color: '#666' }
+        },
+        y: {
+          min: yMin, max: yMax,
+          title: { display: true, text: 'Lap Time', color: '#666' },
+          ticks: { color: '#888', callback: v => secToStr(v) },
+          grid: { color: '#222' }
+        }
+      }
+    }
   });
 }
 

@@ -445,14 +445,32 @@ function updateLapHistory(data) {
     }
 
     const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
+    const firstSeen = prevLapCount[num] === undefined;
 
-    if (lapCount > prev && lapCount > 0 && !isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-') {
-      const timeSec = parseTime(lastLapStr);
+    if (firstSeen && lapCount > 0) {
+      // Seed with best lap on first encounter so chart is never empty
+      const bestStr = cleanVal(r[C.bestLap]);
+      const timeSec = parseTime(bestStr);
       if (timeSec !== null) {
         teamData[num].laps.push({
           lap: lapCount,
           timeSec,
-          timeStr: lastLapStr,
+          timeStr: bestStr,
+          initials: initials(rider),
+          ts: new Date().toLocaleTimeString()
+        });
+      }
+    } else if (lapCount > prev && lapCount > 0) {
+      // New lap completed — prefer lastLap, fall back to bestLap
+      const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
+        ? lastLapStr
+        : cleanVal(r[C.bestLap]);
+      const timeSec = parseTime(timeStr);
+      if (timeSec !== null) {
+        teamData[num].laps.push({
+          lap: lapCount,
+          timeSec,
+          timeStr,
           initials: initials(rider),
           ts: new Date().toLocaleTimeString()
         });

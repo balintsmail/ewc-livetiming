@@ -1011,8 +1011,11 @@ function updateLapHistory(data) {
       return (v === null || isNaN(v)) ? null : v;
     }
 
-    // Category gap is more accurate when multiple cars are "2 Lp." overall
-    const gap1st = parseGapVal(gapCatRaw) ?? parseGapVal(gapOvrRaw);
+    // Category gap: "-" means THIS car leads the class → gap = 0
+    // Only fall back to overall gap if category gap is truly absent (no class info)
+    const gap1st = gapCatRaw === '-'
+      ? 0                                           // class leader
+      : (parseGapVal(gapCatRaw) ?? parseGapVal(gapOvrRaw));
 
     if (firstSeen && lapCount > 0) {
       const bestStr = cleanVal(r[C.bestLap]);

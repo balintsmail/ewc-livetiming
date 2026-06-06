@@ -1283,6 +1283,7 @@ function loadFromStorage() {
 function switchToSession(key) {
   loadSessionData(key);
   activeSessionKey = key;
+  rebuildGapHistory();
   buildTeamFilterBar();
   buildStintFilterBar();
   renderCharts();
@@ -1353,6 +1354,7 @@ async function loadFromSheets() {
     // Sort laps
     Object.values(teamData).forEach(td => td.laps.sort((a, b) => a.lap - b.lap));
     console.log(`Loaded history from Sheets: ${Object.keys(teamData).length} teams`);
+    rebuildGapHistory();
     buildTeamFilterBar();
     renderCharts();
   } catch(e) { console.warn('Sheets load failed:', e); }
@@ -1367,6 +1369,7 @@ buildSessionPicker();
 if (!Object.keys(teamData).length) {
   loadFromSheets().then(() => fetchData());
 } else {
+  rebuildGapHistory(); // clean up gap data after restore
   fetchData();
 }
 setInterval(fetchData, INTERVAL);

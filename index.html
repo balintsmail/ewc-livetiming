@@ -949,6 +949,7 @@ async function fetchData() {
     const data = await res.json();
     rawData = data;
     if (data.Colonnes) buildColumnMap(data.Colonnes);
+    clearStorageIfSessionChanged(data.Titre);
 
     document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
     document.getElementById('clock').textContent = new Date(data.HeureJourUTC).toLocaleTimeString();
@@ -958,6 +959,7 @@ async function fetchData() {
 
     updateLapHistory(data);
     pushNewLapsToSheets();
+    saveToStorage();
     renderStandings(data);
     buildTeamFilterBar();
 
@@ -979,8 +981,64 @@ async function fetchData() {
   }
 }
 
-// Init default active teams before first fetch
+// ── LocalStorage persistence ──────────────────────────────────
+const STORAGE_KEY = 'ewc_timing_state';
+
+function saveToStorage() {
+  try {
+    const state = {
+      sessionTitle: rawData?.Titre || '',
+      teamData,
+      prevLapCount,
+      prevPitCount,
+      sentLaps: [...sentLaps],
+      teamColors,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e) { console.warn('Storage save failed:', e); }
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    // Don't restore if saved more than 8 hours ago
+    if (Date.now() - state.savedAt > 8 * 3600 * 1000) {
+      localStorage.removeItem(STORAGE_KEY); return;
+    }
+    // Restore state
+    Object.assign(teamData, state.teamData || {});
+    Object.assign(prevLapCount, state.prevLapCount || {});
+    Object.assign(prevPitCount, state.prevPitCount || {});
+    Object.assign(teamColors, state.teamColors || {});
+    (state.sentLaps || []).forEach(k => sentLaps.add(k));
+    console.log(`Restored ${Object.keys(teamData).length} teams from storage (session: ${state.sessionTitle})`);
+    return state.sessionTitle;
+  } catch(e) { console.warn('Storage load failed:', e); }
+}
+
+function clearStorageIfSessionChanged(newTitle) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (state.sessionTitle && newTitle && state.sessionTitle !== newTitle) {
+      console.log(`Session changed (${state.sessionTitle} → ${newTitle}), clearing stored laps`);
+      localStorage.removeItem(STORAGE_KEY);
+      // Reset in-memory state too
+      Object.keys(teamData).forEach(k => delete teamData[k]);
+      Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
+      Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
+      sentLaps.clear();
+    }
+  } catch(e) {}
+}
+
+// ── Init ──────────────────────────────────────────────────────
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
+loadFromStorage();
 
 fetchData();
 setInterval(fetchData, INTERVAL);

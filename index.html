@@ -788,19 +788,7 @@ function renderGapChart(active) {
     parsing: false,
   });
 
-  // Our lap crossing markers — thin dark grey dotted vertical lines
-  refHist.forEach(pt => {
-    const xVal = pt.t || pt.lap;
-    datasets.push({
-      label: `_ourlap_${pt.lap}`,
-      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
-      borderColor: '#2a2a2a', borderWidth: 1, borderDash: [2, 4],
-      pointRadius: 0, fill: false, parsing: false, tension: 0,
-    });
-  });
-
-  // Pit stop vertical lines for all active teams
-  // Auto-set slider defaults from data on first render
+  // Resolve Y range first (sliders)
   const minSlider = document.getElementById('gap-y-min');
   const maxSlider = document.getElementById('gap-y-max');
   const allGaps = active.filter(n => n !== refTeam).flatMap(n => calcRealGap(n, refTeam).map(p => p.y));
@@ -813,13 +801,24 @@ function renderGapChart(active) {
     maxSlider.value = 60;
     document.getElementById('gap-y-max-label').textContent = '+60s';
   }
-  // Mark as user-set when they interact
   if (minSlider) minSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-min-label').textContent = this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
   if (maxSlider) maxSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-max-label').textContent = '+'+this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
-
   const yMin = parseInt(minSlider?.value) ?? -100;
   const yMax = parseInt(maxSlider?.value) ?? 60;
   const yRange = Math.max(Math.abs(yMin), yMax);
+
+  // Our lap crossing markers — thin dark grey dotted vertical lines
+  refHist.forEach(pt => {
+    const xVal = pt.t || pt.lap;
+    datasets.push({
+      label: `_ourlap_${pt.lap}`,
+      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
+      borderColor: '#2a2a2a', borderWidth: 1, borderDash: [2, 4],
+      pointRadius: 0, fill: false, parsing: false, tension: 0,
+    });
+  });
+
+  // Pit stop vertical lines for all active teams
   const pitLabels = []; // { x, label, col } for afterDraw
   [...active, refTeam].forEach(num => {
     const stints = teamData[num]?.stints || [];

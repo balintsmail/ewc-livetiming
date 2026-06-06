@@ -166,6 +166,9 @@ const C = { status:0, pos:1, catPos:2, num:3, cat:4, nat:5, team:6, rider:7, rid
              s1:10, s2:11, s3:12, lastLap:13, bestLap:14, gap:15, gapCat:16, laps:17, pits:18 };
 
 const DEFAULT_TEAMS = ['38','27','9','25','49','18','77'];
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz5cYKuhRC4vLKTo9lMMTTzvlERIgrP4tQaM0DoraGCdS28WMvMuSEdGeSfkeNGGs79/exec';
+// track which laps already sent: "num-lap" keys
+const sentLaps = new Set();
 
 // Persistent colors per team number
 const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
@@ -481,6 +484,25 @@ function updateLapHistory(data) {
   });
 }
 
+// ── Push new laps to Google Sheets ───────────────────────────
+function pushNewLapsToSheets() {
+  const newLaps = [];
+  Object.entries(teamData).forEach(([num, td]) => {
+    td.laps.forEach(lap => {
+      const key = `${num}-${lap.lap}`;
+      if (!sentLaps.has(key)) {
+        sentLaps.add(key);
+        newLaps.push({ num, name: td.name, rider: td.rider, ...lap });
+      }
+    });
+  });
+  if (!newLaps.length) return;
+  fetch(SHEETS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ laps: newLaps }),
+  }).catch(e => console.warn('Sheets push failed:', e));
+}
+
 // ── Copy for Sheets ──────────────────────────────────────────
 function copyForSheets() {
   if (!rawData) return;
@@ -517,6 +539,7 @@ async function fetchData() {
     document.getElementById('status-dot').classList.add('live');
 
     updateLapHistory(data);
+    pushNewLapsToSheets();
     renderStandings(data);
     buildTeamFilterBar();
 

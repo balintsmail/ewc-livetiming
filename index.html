@@ -105,12 +105,12 @@
 </header>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('standings')">Standings</div>
-  <div class="tab" onclick="switchTab('charts')">Charts</div>
+  <div class="tab" onclick="switchTab('standings')">Standings</div>
+  <div class="tab active" onclick="switchTab('charts')">Charts</div>
 </div>
 
 <!-- STANDINGS TAB -->
-<div id="tab-standings" class="panel active">
+<div id="tab-standings" class="panel">
   <div id="filter-bar">
     <button class="filter-btn active" onclick="setFilter('Overall')">Overall</button>
     <button class="filter-btn" onclick="setFilter('EWC')">EWC</button>
@@ -135,7 +135,7 @@
 </div>
 
 <!-- CHARTS TAB -->
-<div id="tab-charts" class="panel">
+<div id="tab-charts" class="panel active">
   <div id="team-filter-bar">
     <label>Teams:</label>
     <!-- populated by JS -->
@@ -502,7 +502,7 @@ async function fetchData() {
     renderStandings(data);
     buildTeamFilterBar();
 
-    if (document.getElementById('tab-charts').classList.contains('active')) renderCharts();
+    renderCharts();
 
     if (data.Messages && data.Messages.length) {
       document.getElementById('messages').innerHTML =

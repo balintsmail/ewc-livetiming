@@ -469,8 +469,8 @@ function renderCharts() {
       label: label,
       data: td.laps.map(l => ({ x: l.lap, y: l.timeSec, excluded: l.excluded, lap: l })),
       backgroundColor: td.laps.map(l => l.excluded ? '#555' : col + 'cc'),
-      pointRadius: td.laps.map(l => l.excluded ? 3 : 5),
-      pointHoverRadius: 7,
+      pointRadius: td.laps.map(l => l.excluded ? 2 : 3),
+      pointHoverRadius: 5,
       showLine: false,
       parsing: false,
     });

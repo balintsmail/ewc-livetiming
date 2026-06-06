@@ -1036,11 +1036,62 @@ function clearStorageIfSessionChanged(newTitle) {
   } catch(e) {}
 }
 
+// ── Load history from Google Sheets ──────────────────────────
+async function loadFromSheets() {
+  try {
+    console.log('No local storage found, fetching lap history from Sheets...');
+    const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(SHEETS_URL);
+    const res = await fetch(proxyUrl);
+    const data = await res.json();
+    if (!data.headers || !data.rows || !data.rows.length) {
+      console.log('Sheets: no data found'); return;
+    }
+    // Parse team columns from headers: "#38 Time(s)", "#38 Rider", ...
+    const teams = [];
+    for (let i = 1; i < data.headers.length; i += 2) {
+      const match = String(data.headers[i]).match(/#(\d+)/);
+      if (match) teams.push({ num: match[1], timeCol: i, riderCol: i + 1 });
+    }
+    // Populate teamData from rows
+    data.rows.forEach(row => {
+      const lapNum = parseInt(row[0]);
+      if (!lapNum) return;
+      teams.forEach(t => {
+        const timeSec = parseFloat(row[t.timeCol]);
+        const rider = String(row[t.riderCol] || '').trim();
+        if (!timeSec || isNaN(timeSec)) return;
+        if (!teamData[t.num]) {
+          teamData[t.num] = { name: rider || `#${t.num}`, rider, cat: '', laps: [], stints: [[]] };
+          colorForTeam(t.num);
+        }
+        const alreadyHas = teamData[t.num].laps.find(l => l.lap === lapNum);
+        if (alreadyHas) return;
+        const entry = { lap: lapNum, timeSec, timeStr: secToStr(timeSec),
+                        initials: initials(rider || 'X'), ts: '', gap1st: 0 };
+        teamData[t.num].laps.push(entry);
+        teamData[t.num].stints[teamData[t.num].stints.length - 1].push(entry);
+        prevLapCount[t.num] = Math.max(prevLapCount[t.num] || 0, lapNum);
+        sentLaps.add(`${t.num}-${lapNum}`); // mark as already sent
+      });
+    });
+    // Sort laps
+    Object.values(teamData).forEach(td => td.laps.sort((a, b) => a.lap - b.lap));
+    console.log(`Loaded history from Sheets: ${Object.keys(teamData).length} teams`);
+    buildTeamFilterBar();
+    renderCharts();
+  } catch(e) { console.warn('Sheets load failed:', e); }
+}
+
 // ── Init ──────────────────────────────────────────────────────
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
-loadFromStorage();
+const storedTitle = loadFromStorage();
 
-fetchData();
+// If nothing in storage, try loading from Sheets before first fetch
+if (!Object.keys(teamData).length) {
+  loadFromSheets().then(() => fetchData());
+} else {
+  fetchData();
+}
 setInterval(fetchData, INTERVAL);
 </script>
 </body>

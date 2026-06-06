@@ -464,8 +464,9 @@ function markInOutLaps(laps) {
   if (!laps.length) return;
   const validTimes = laps.map(l => l.timeSec).filter(Boolean);
   const best = Math.min(...validTimes);
-  // exclude laps more than 8% slower than best (in/out laps)
-  laps.forEach(l => { l.excluded = l.timeSec > best * 1.08; });
+  // exclude laps more than 25% slower than best (true in/out laps only)
+  // rain laps are typically 12-20% slower — should NOT be excluded
+  laps.forEach(l => { l.excluded = l.timeSec > best * 1.25; });
 }
 
 function movingAvg(laps, window = 10) {
@@ -1080,7 +1081,7 @@ function buildStintFilterBar() {
 function stintAvgPace(stint) {
   if (!stint.length) return null;
   const best = Math.min(...stint.map(l => l.timeSec).filter(Boolean));
-  const valid = stint.filter(l => l.timeSec && l.timeSec <= best * 1.08);
+  const valid = stint.filter(l => l.timeSec && l.timeSec <= best * 1.25);
   return valid.length ? valid.reduce((a,b) => a + b.timeSec, 0) / valid.length : null;
 }
 

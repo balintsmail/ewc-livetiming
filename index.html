@@ -90,6 +90,24 @@
   /* Messages */
   #messages { font-size: 12px; color: #94a3b8; margin-top: 6px; }
   #messages span { color: #fbbf24; margin-right: 6px; }
+
+  /* ── Stints tab ── */
+  .stint-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .stint-controls label { font-size: 12px; color: #aaa; }
+  .stint-controls input[type=number] {
+    background: #1a1a1a; border: 1px solid #333; color: #fff;
+    padding: 3px 8px; border-radius: 4px; width: 64px; font-size: 12px;
+  }
+  #stint-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #stint-table th {
+    background: #1a2533; color: #90b4d6; font-weight: 600;
+    padding: 6px 10px; text-align: left; white-space: nowrap;
+  }
+  #stint-table td { padding: 6px 10px; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }
+  #stint-table tr:hover td { background: #141414; }
+  .pit-soon { color: #ef4444 !important; font-weight: 700; }
+  .pit-mid  { color: #f59e0b !important; }
+  .pit-ok   { color: #22c55e !important; }
 </style>
 </head>
 <body>
@@ -107,6 +125,7 @@
 <div class="tabs">
   <div class="tab" onclick="switchTab('standings')">Standings</div>
   <div class="tab active" onclick="switchTab('charts')">Charts</div>
+  <div class="tab" onclick="switchTab('stints')">Stints</div>
 </div>
 
 <!-- STANDINGS TAB -->
@@ -157,6 +176,41 @@
   </div>
 </div>
 
+<!-- STINTS TAB -->
+<div id="tab-stints" class="panel">
+  <div class="stint-controls">
+    <label>Teams:</label>
+    <div id="stint-team-filter-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+    <span style="margin-left:16px;color:#aaa;font-size:12px">Max stint:</span>
+    <input type="number" id="max-stint-input" value="20" min="1" max="200" onchange="renderStints()">
+    <span style="color:#aaa;font-size:12px">laps</span>
+    <span id="longest-stint-label" style="font-size:11px;color:#555;margin-left:8px"></span>
+  </div>
+
+  <div class="chart-card">
+    <h3>Laps Remaining Until Pit</h3>
+    <div class="chart-wrap" style="height:220px"><canvas id="chart-stints"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <h3>Pit Stop Prediction</h3>
+    <table id="stint-table">
+      <thead>
+        <tr>
+          <th>Team</th>
+          <th>Stint history</th>
+          <th style="text-align:center">Cur. stint laps</th>
+          <th style="text-align:center">Laps left</th>
+          <th style="text-align:right">Avg pace</th>
+          <th style="text-align:right">Pit in</th>
+          <th style="text-align:right">Pit at</th>
+        </tr>
+      </thead>
+      <tbody id="stint-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 const API = 'https://corsproxy.io/?url=https://fimewc.live-frclassification.fr/r1.json';
 const INTERVAL = 5000;
@@ -185,6 +239,9 @@ let activeTeams = new Set(DEFAULT_TEAMS);
 let rawData = null;
 let currentFilter = 'Overall';
 let lapChart = null;
+let stintChart = null;
+let maxObservedStint = 0;
+const prevPitCount = {};
 
 // ── Utilities ────────────────────────────────────────────────
 function cleanVal(s) { return s ? s.replace(/{[^}]+}/g, '').trim() : ''; }
@@ -233,10 +290,11 @@ function colorForTeam(num) {
 // ── Tab switching ────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) =>
-    t.classList.toggle('active', ['standings','charts'][i] === name));
+    t.classList.toggle('active', ['standings','charts','stints'][i] === name));
   document.querySelectorAll('.panel').forEach(p =>
     p.classList.toggle('active', p.id === 'tab-' + name));
   if (name === 'charts') renderCharts();
+  if (name === 'stints') { buildStintFilterBar(); renderStints(); }
 }
 
 // ── Standings filter ─────────────────────────────────────────
@@ -484,9 +542,11 @@ function updateLapHistory(data) {
     const lastLapStr = cleanVal(lastLapRaw);
     const cat = cleanVal(r[C.cat]);
 
+    const pitCount = parseInt(cleanVal(r[C.pits])) || 0;
+
     if (!teamData[num]) {
-      teamData[num] = { name: cleanVal(r[C.team]), rider, cat, laps: [] };
-      colorForTeam(num); // assign color
+      teamData[num] = { name: cleanVal(r[C.team]), rider, cat, laps: [], stints: [[]] };
+      colorForTeam(num);
     } else {
       teamData[num].rider = rider;
     }
@@ -494,38 +554,152 @@ function updateLapHistory(data) {
     const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
     const firstSeen = prevLapCount[num] === undefined;
 
+    // Detect new pit stop → start a new stint
+    if (!firstSeen && pitCount > (prevPitCount[num] || 0)) {
+      teamData[num].stints.push([]);
+    }
+    prevPitCount[num] = pitCount;
+
+    const addLapEntry = (entry) => {
+      teamData[num].laps.push(entry);
+      const stints = teamData[num].stints;
+      stints[stints.length - 1].push(entry);
+      // update longest observed stint
+      const stintLen = stints[stints.length - 1].length;
+      if (stintLen > maxObservedStint) {
+        maxObservedStint = stintLen;
+        const lbl = document.getElementById('longest-stint-label');
+        if (lbl) lbl.textContent = `(longest observed: ${maxObservedStint})`;
+      }
+    };
+
     if (firstSeen && lapCount > 0) {
-      // Seed with best lap on first encounter so chart is never empty
       const bestStr = cleanVal(r[C.bestLap]);
       const timeSec = parseTime(bestStr);
       if (timeSec !== null) {
-        teamData[num].laps.push({
-          lap: lapCount,
-          timeSec,
-          timeStr: bestStr,
-          initials: initials(rider),
-          ts: new Date().toLocaleTimeString()
-        });
+        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString() });
       }
     } else if (lapCount > prev && lapCount > 0) {
-      // New lap completed — prefer lastLap, fall back to bestLap
       const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
-        ? lastLapStr
-        : cleanVal(r[C.bestLap]);
+        ? lastLapStr : cleanVal(r[C.bestLap]);
       const timeSec = parseTime(timeStr);
       if (timeSec !== null) {
-        teamData[num].laps.push({
-          lap: lapCount,
-          timeSec,
-          timeStr,
-          initials: initials(rider),
-          ts: new Date().toLocaleTimeString()
-        });
+        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString() });
       }
     }
 
     prevLapCount[num] = lapCount;
   });
+}
+
+// ── Stint filter bar (mirrors charts) ────────────────────────
+function buildStintFilterBar() {
+  const bar = document.getElementById('stint-team-filter-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const allNums = Object.keys(teamData).sort((a,b) => {
+    const ai = DEFAULT_TEAMS.indexOf(a), bi = DEFAULT_TEAMS.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1; if (bi >= 0) return 1;
+    return parseInt(a) - parseInt(b);
+  });
+  allNums.forEach(num => {
+    const btn = document.createElement('button');
+    btn.className = 'team-toggle' + (activeTeams.has(num) ? ' on' : '');
+    btn.textContent = `#${num}`;
+    const col = colorForTeam(num);
+    if (activeTeams.has(num)) { btn.style.borderColor = col; btn.style.background = col+'22'; btn.style.color = col; }
+    btn.onclick = () => {
+      if (activeTeams.has(num)) {
+        activeTeams.delete(num);
+        btn.classList.remove('on'); btn.style.borderColor='transparent'; btn.style.background='#1a1a1a'; btn.style.color='#888';
+      } else {
+        activeTeams.add(num);
+        btn.classList.add('on'); btn.style.borderColor=col; btn.style.background=col+'22'; btn.style.color=col;
+      }
+      // sync chart filter bar too
+      buildTeamFilterBar();
+      renderStints();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+// ── Stint rendering ───────────────────────────────────────────
+function stintAvgPace(stint) {
+  if (!stint.length) return null;
+  const best = Math.min(...stint.map(l => l.timeSec).filter(Boolean));
+  const valid = stint.filter(l => l.timeSec && l.timeSec <= best * 1.08);
+  return valid.length ? valid.reduce((a,b) => a + b.timeSec, 0) / valid.length : null;
+}
+
+function renderStints() {
+  const active = [...activeTeams].filter(n => teamData[n]);
+  if (!active.length) return;
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const nowMs = rawData ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+
+  const labels  = active.map(n => `#${n}`);
+  const done    = active.map(n => { const s = teamData[n].stints; return (s[s.length-1]||[]).length; });
+  const remaining = done.map(d => Math.max(0, maxStint - d));
+  const colors  = active.map(n => {
+    const pct = done[active.indexOf(n)] / maxStint;
+    return pct >= 0.85 ? '#ef4444cc' : pct >= 0.6 ? '#f59e0bcc' : colorForTeam(n) + 'cc';
+  });
+
+  if (stintChart) stintChart.destroy();
+  stintChart = new Chart(document.getElementById('chart-stints'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Laps done', data: done, backgroundColor: colors, borderRadius: 3 },
+        { label: 'Remaining', data: remaining, backgroundColor: '#1e1e1e', borderRadius: 3 },
+      ]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.datasetIndex===0 ? ` Done: ${ctx.parsed.x}` : ` Remaining: ${ctx.parsed.x}` } }
+      },
+      scales: {
+        x: { stacked: true, max: maxStint, ticks: { color: '#888', stepSize: 2 }, grid: { color: '#222' } },
+        y: { stacked: true, ticks: { color: '#ccc' }, grid: { color: '#1a1a1a' } }
+      }
+    }
+  });
+
+  // Prediction table
+  document.getElementById('stint-table-body').innerHTML = active.map(num => {
+    const td = teamData[num];
+    const stints = td.stints || [[]];
+    const cur = stints[stints.length - 1] || [];
+    const col = colorForTeam(num);
+    const stintsDone = stints.length - 1;
+    const curLen = cur.length;
+    const lapsLeft = Math.max(0, maxStint - curLen);
+    const avg = stintAvgPace(cur);
+    const pitInSec = avg !== null ? lapsLeft * avg : null;
+    const pitAtMs  = pitInSec !== null ? nowMs + pitInSec * 1000 : null;
+    const pitAtStr = pitAtMs  !== null ? new Date(pitAtMs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
+    const pitInStr = pitInSec !== null ? secToStr(pitInSec) : '—';
+    const pct = curLen / maxStint;
+    const remClass = pct >= 0.85 ? 'pit-soon' : pct >= 0.6 ? 'pit-mid' : 'pit-ok';
+
+    const history = stints.slice(0,-1).map((s,i) =>
+      `<span style="color:#555">${i+1}:</span><b>${s.length}</b>`).join(' ');
+
+    return `<tr>
+      <td style="color:${col};font-weight:700">#${num} <span style="color:#666;font-weight:400;font-size:11px">${td.name.slice(0,18)}</span></td>
+      <td style="font-size:11px;color:#666">${history || '—'}</td>
+      <td style="text-align:center;font-weight:700;font-size:15px">${curLen}</td>
+      <td class="${remClass}" style="text-align:center;font-size:15px">${lapsLeft}</td>
+      <td style="text-align:right;font-family:monospace;color:#94a3b8">${avg ? secToStr(avg) : '—'}</td>
+      <td style="text-align:right;font-family:monospace;color:#f97316">${pitInStr}</td>
+      <td style="text-align:right;font-weight:700;color:#fbbf24">${pitAtStr}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Push new laps to Google Sheets ───────────────────────────
@@ -588,6 +762,9 @@ async function fetchData() {
     buildTeamFilterBar();
 
     renderCharts();
+    if (document.getElementById('tab-stints').classList.contains('active')) {
+      buildStintFilterBar(); renderStints();
+    }
 
     if (data.Messages && data.Messages.length) {
       document.getElementById('messages').innerHTML =

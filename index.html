@@ -773,19 +773,8 @@ function renderGapChart(active) {
       };
     });
 
-  // our lap crossing markers — thin dark grey dotted lines
-  const refHist = gapHistory[refTeam] || [];
-  refHist.forEach(pt => {
-    const xVal = pt.t || pt.lap;
-    datasets.push({
-      label: `_ourlap_${pt.lap}`,
-      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
-      borderColor: '#333', borderWidth: 1, borderDash: [2, 4],
-      pointRadius: 0, fill: false, parsing: false, tension: 0,
-    });
-  });
-
   // zero reference line for "us"
+  const refHist = gapHistory[refTeam] || [];
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
     label: `${teamLabel(refTeam)} (us)`,
@@ -797,6 +786,17 @@ function renderGapChart(active) {
     tension: 0,
     fill: false,
     parsing: false,
+  });
+
+  // Our lap crossing markers — thin dark grey dotted vertical lines
+  refHist.forEach(pt => {
+    const xVal = pt.t || pt.lap;
+    datasets.push({
+      label: `_ourlap_${pt.lap}`,
+      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
+      borderColor: '#2a2a2a', borderWidth: 1, borderDash: [2, 4],
+      pointRadius: 0, fill: false, parsing: false, tension: 0,
+    });
   });
 
   // Pit stop vertical lines for all active teams

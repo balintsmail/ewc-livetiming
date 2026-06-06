@@ -187,15 +187,13 @@
     </h3>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="font-size:11px;color:#555;white-space:nowrap">Min</span>
-      <input type="range" id="gap-y-min" min="-600" max="0" value="-300" step="10"
-        style="flex:1;accent-color:#ef4444"
-        oninput="document.getElementById('gap-y-min-label').textContent=this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n]))">
-      <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-300s</span>
+      <input type="range" id="gap-y-min" min="-600" max="0" value="-100" step="10"
+        style="flex:1;accent-color:#ef4444">
+      <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-100s</span>
       <span style="font-size:11px;color:#555;white-space:nowrap;margin-left:8px">Max</span>
-      <input type="range" id="gap-y-max" min="0" max="600" value="300" step="10"
-        style="flex:1;accent-color:#22c55e"
-        oninput="document.getElementById('gap-y-max-label').textContent='+'+this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n]))">
-      <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+300s</span>
+      <input type="range" id="gap-y-max" min="0" max="600" value="60" step="10"
+        style="flex:1;accent-color:#22c55e">
+      <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+60s</span>
     </div>
     <div class="chart-wrap" style="height:680px"><canvas id="chart-gap"></canvas></div>
   </div>
@@ -771,8 +769,25 @@ function renderGapChart(active) {
   });
 
   // Pit stop vertical lines for all active teams
-  const yMin = parseInt(document.getElementById('gap-y-min')?.value) ?? -300;
-  const yMax = parseInt(document.getElementById('gap-y-max')?.value) ?? 300;
+  // Auto-set slider defaults from data on first render
+  const minSlider = document.getElementById('gap-y-min');
+  const maxSlider = document.getElementById('gap-y-max');
+  const allGaps = active.filter(n => n !== refTeam).flatMap(n => calcRealGap(n, refTeam).map(p => p.y));
+  if (minSlider && !minSlider._userSet) {
+    const dataMin = allGaps.length ? Math.floor(Math.min(...allGaps) / 10) * 10 : -100;
+    minSlider.value = Math.max(-600, Math.min(0, dataMin));
+    document.getElementById('gap-y-min-label').textContent = minSlider.value + 's';
+  }
+  if (maxSlider && !maxSlider._userSet) {
+    maxSlider.value = 60;
+    document.getElementById('gap-y-max-label').textContent = '+60s';
+  }
+  // Mark as user-set when they interact
+  if (minSlider) minSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-min-label').textContent = this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
+  if (maxSlider) maxSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-max-label').textContent = '+'+this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
+
+  const yMin = parseInt(minSlider?.value) ?? -100;
+  const yMax = parseInt(maxSlider?.value) ?? 60;
   const yRange = Math.max(Math.abs(yMin), yMax);
   const pitLabels = []; // { x, label, col } for afterDraw
   [...active, refTeam].forEach(num => {

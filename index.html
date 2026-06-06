@@ -225,9 +225,36 @@
 const API = 'https://corsproxy.io/?url=https://fimewc.live-frclassification.fr/r1.json';
 const INTERVAL = 5000;
 
-// Column indices
-const C = { status:0, pos:1, catPos:2, num:3, cat:4, nat:5, team:6, rider:7, riderNat:8, bike:9,
-             s1:10, s2:11, s3:12, lastLap:13, bestLap:14, gap:15, gapCat:16, laps:17, pits:18 };
+// Column indices — rebuilt dynamically from Colonnes in each JSON response
+let C = { status:0, pos:1, catPos:2, num:3, cat:4, nat:5, team:6, rider:7, riderNat:8, bike:9,
+           s1:10, s2:11, s3:12, lastLap:13, bestLap:14, gap:15, gapCat:16, laps:17, pits:18 };
+
+function buildColumnMap(colonnes) {
+  const m = {};
+  colonnes.forEach((col, i) => { m[col.Nom] = i; });
+  C = {
+    status:      0,
+    pos:         m['Position']           ?? 1,
+    catPos:      m['PositionCategorie']  ?? 2,
+    num:         m['Numero']             ?? 3,
+    cat:         m['Categorie']          ?? 4,
+    nat:         m['Sponsors']           ?? 5,
+    team:        m['Equipe']             ?? 6,
+    rider:       m['Nom'] ?? m['Nom3']   ?? 7,
+    riderNat:    m['Nationalite3']       ?? 8,
+    bike:        m['Perso5'] ?? m['Vehicule'] ?? 9,
+    s1:          m['Inter1']             ?? 10,
+    s2:          m['Inter2']             ?? 11,
+    s3:          m['Inter3']             ?? 12,
+    lastLap:     m['TpsTour']            ?? 13,
+    bestLap:     m['MeilleurTour']       ?? 14,
+    gap:         m['Ecart1er']           ?? 15,
+    gapCat:      m['Ecart1erCategorie']  ?? 16,
+    laps:        m['NbTour']             ?? 17,
+    pits:        m['NbStand']            ?? 18,
+    lapsSinceStand: m['TourDepuisStand'] ?? null,
+  };
+}
 
 const DEFAULT_TEAMS = ['38','27','9','25','49','18','77'];
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz5cYKuhRC4vLKTo9lMMTTzvlERIgrP4tQaM0DoraGCdS28WMvMuSEdGeSfkeNGGs79/exec';
@@ -903,6 +930,7 @@ async function fetchData() {
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     rawData = data;
+    if (data.Colonnes) buildColumnMap(data.Colonnes);
 
     document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
     document.getElementById('clock').textContent = new Date(data.HeureJourUTC).toLocaleTimeString();

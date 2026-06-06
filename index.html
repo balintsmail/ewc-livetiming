@@ -587,20 +587,42 @@ function renderCharts() {
 }
 
 // ── Gap chart ─────────────────────────────────────────────────
-// Use gapHistory (recorded every poll) for smooth gap evolution
+// Use gapHistory + lap time fallback for missing gaps
 // gap = other.gap1st - ref.gap1st  (negative = other is ahead of us)
 function calcRealGap(numOther, numRef) {
   const otherHist = gapHistory[numOther] || [];
   const refHist   = gapHistory[numRef]   || [];
-  return otherHist.map(pt => {
-    // find closest ref entry by lap
+  const otherLaps = teamData[numOther]?.laps || [];
+  const refLaps   = teamData[numRef]?.laps   || [];
+
+  const result = [];
+  let lastKnownGap = null;
+
+  for (const pt of otherHist) {
+    // Find closest ref entry by lap
     const refPt = refHist.reduce((best, r) =>
       Math.abs(r.lap - pt.lap) < Math.abs(best.lap - pt.lap) ? r : best,
-      refHist[0] || { lap: 0, gap: 0 }
+      refHist[0] || { lap: 0, gap: null }
     );
-    const refGap = refPt ? (refPt.gap || 0) : 0;
-    return { x: pt.lap, y: +(( pt.gap || 0) - refGap).toFixed(3) };
-  });
+    const refGap = refPt?.gap ?? null;
+
+    if (pt.gap !== null && refGap !== null) {
+      // Both have valid API gaps — use them directly
+      lastKnownGap = +(pt.gap - refGap).toFixed(3);
+      result.push({ x: pt.lap, y: lastKnownGap });
+    } else if (lastKnownGap !== null) {
+      // One side has no API gap — estimate using lap time differences
+      const otherLap = otherLaps.find(l => l.lap === pt.lap);
+      const refLap   = refLaps.find(l => l.lap === pt.lap);
+      if (otherLap?.timeSec && refLap?.timeSec) {
+        lastKnownGap = +(lastKnownGap + (otherLap.timeSec - refLap.timeSec)).toFixed(3);
+        result.push({ x: pt.lap, y: lastKnownGap });
+      }
+      // else skip this point (no lap time to estimate from)
+    }
+    // else: no previous known gap and no API gap → skip
+  }
+  return result;
 }
 
 function buildRefTeamBar(active) {
@@ -780,7 +802,8 @@ function updateLapHistory(data) {
     };
 
     const gap1stRaw = cleanVal(r[C.gap]);
-    const gap1st = parseFloat(gap1stRaw) || 0; // seconds behind leader
+    // null = no data (pit, first lap, leader shows '-'); 0 = actually 0
+    const gap1st = (gap1stRaw === '-' || gap1stRaw === '') ? null : (parseFloat(gap1stRaw) || 0);
 
     if (firstSeen && lapCount > 0) {
       const bestStr = cleanVal(r[C.bestLap]);

@@ -991,24 +991,28 @@ function updateLapHistory(data) {
       else gapHistory[num].push(gapPt);
     };
 
-    const gap1stRaw = cleanVal(r[C.gap]);
-    // null = no data; handle "2 Lp." (lapped) by converting to seconds
-    let gap1st = null;
-    if (gap1stRaw && gap1stRaw !== '-') {
-      const lpMatch = gap1stRaw.match(/^(\d+)\s*Lp\./i);
+    // Use category gap (Ecart1erCategorie) — works even when lapped ("2 Lp.")
+    // because within the class, it shows the real seconds gap to the class leader
+    const gapCatRaw = cleanVal(r[C.gapCat]);
+    const gapOvrRaw = cleanVal(r[C.gap]);
+
+    // Pick the best available gap: prefer category gap (seconds), fall back to overall
+    function parseGapVal(raw) {
+      if (!raw || raw === '-') return null;
+      const lpMatch = raw.match(/^(\d+)\s*Lp\./i);
       if (lpMatch) {
-        // N laps down → N × current avg lap time
         const allBests = Object.values(teamData)
           .map(td => { const b = td.laps.map(l=>l.timeSec).filter(Boolean); return b.length ? Math.min(...b) : null; })
           .filter(Boolean);
         const avgLap = allBests.length ? allBests.reduce((a,b)=>a+b,0)/allBests.length : 143;
-        gap1st = parseInt(lpMatch[1]) * avgLap;
-      } else {
-        // Try parseTime first (handles "1:04.739" → 64.739s), then parseFloat for plain seconds
-        const v = parseTime(gap1stRaw) ?? parseFloat(gap1stRaw);
-        gap1st = (v === null || isNaN(v)) ? null : v;
+        return parseInt(lpMatch[1]) * avgLap;
       }
+      const v = parseTime(raw) ?? parseFloat(raw);
+      return (v === null || isNaN(v)) ? null : v;
     }
+
+    // Category gap is more accurate when multiple cars are "2 Lp." overall
+    const gap1st = parseGapVal(gapCatRaw) ?? parseGapVal(gapOvrRaw);
 
     if (firstSeen && lapCount > 0) {
       const bestStr = cleanVal(r[C.bestLap]);

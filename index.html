@@ -708,17 +708,68 @@ function renderGapChart(active) {
     parsing: false,
   });
 
+  // Pit stop vertical lines for all active teams
+  const yRange = parseInt(document.getElementById('gap-y-slider')?.value) || 300;
+  const pitLabels = []; // { x, label, col } for afterDraw
+  [...active, refTeam].forEach(num => {
+    const stints = teamData[num]?.stints || [];
+    const col = colorForTeam(num);
+    stints.slice(0, -1).forEach(stint => {
+      if (!stint.length) return;
+      const pitLap = stint[stint.length - 1].lap;
+      pitLabels.push({ x: pitLap, label: `L${pitLap}`, col, num });
+      datasets.push({
+        label: `_pit_gap_${num}_${pitLap}`,
+        data: [{ x: pitLap, y: -yRange * 1.1 }, { x: pitLap, y: yRange * 1.1 }],
+        borderColor: col,
+        borderWidth: 1.5,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        fill: false,
+        parsing: false,
+        tension: 0,
+      });
+    });
+  });
+
   if (gapChart) gapChart.destroy();
+
+  // Custom plugin to draw L{N} lap labels on pit lines
+  const pitLabelPlugin = {
+    id: 'pitLabels',
+    afterDraw(chart) {
+      const ctx = chart.ctx;
+      const xScale = chart.scales.x;
+      const top = chart.chartArea.top;
+      pitLabels.forEach(pl => {
+        const xPx = xScale.getPixelForValue(pl.x);
+        if (xPx < chart.chartArea.left || xPx > chart.chartArea.right) return;
+        ctx.save();
+        ctx.fillStyle = pl.col;
+        ctx.font = 'bold 10px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(pl.label, xPx, top + 10);
+        ctx.restore();
+      });
+    }
+  };
+
   gapChart = new Chart(document.getElementById('chart-gap'), {
     type: 'line',
     data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       plugins: {
-        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        legend: {
+          labels: {
+            color: '#ccc', font: { size: 11 }, boxWidth: 14,
+            filter: item => !item.text.startsWith('_pit_gap_')
+          }
+        },
         tooltip: {
           callbacks: {
             label: ctx => {
+              if (ctx.dataset.label.startsWith('_pit_gap_')) return null;
               const s = ctx.parsed.y;
               const sign = s > 0 ? '+' : '';
               return ` ${ctx.dataset.label}: ${sign}${s.toFixed(3)}s`;
@@ -736,12 +787,12 @@ function renderGapChart(active) {
           title: { display: true, text: 'Gap (s)', color: '#666' },
           ticks: { color: '#888', callback: v => (v > 0 ? '+' : '') + v.toFixed(1) + 's' },
           grid: { color: '#222' },
-          // zero line highlight
-          min: -(parseInt(document.getElementById('gap-y-slider')?.value) || 300),
-          max:  (parseInt(document.getElementById('gap-y-slider')?.value) || 300),
+          min: -yRange,
+          max:  yRange,
         }
       }
-    }
+    },
+    plugins: [pitLabelPlugin],
   });
 }
 

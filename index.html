@@ -668,25 +668,40 @@ function calcRealGap(numOther, numRef) {
   for (const pt of otherHist) {
     const refPt = refHist.reduce((best, r) =>
       Math.abs(r.lap - pt.lap) < Math.abs(best.lap - pt.lap) ? r : best,
-      refHist[0] || { lap: 0, gap: null }
+      refHist[0] || { lap: 0, gap: null, t: null }
     );
     const refGap = refPt?.gap ?? null;
+    const xVal = pt.t || pt.lap; // use timestamp if available, else lap
 
     if (pt.gap !== null && refGap !== null) {
-      // Valid API gaps — use directly
       lastKnownGap = +(pt.gap - refGap).toFixed(3);
-      result.push({ x: pt.lap, y: lastKnownGap });
+      result.push({ x: xVal, y: lastKnownGap, lap: pt.lap });
     } else {
-      // No API gap — accumulate from lap time difference
       const otherLap = otherLaps.find(l => l.lap === pt.lap);
       const refLap   = refLaps.find(l => l.lap === pt.lap);
       if (otherLap?.timeSec && refLap?.timeSec) {
         lastKnownGap = +(lastKnownGap + (otherLap.timeSec - refLap.timeSec)).toFixed(3);
-        result.push({ x: pt.lap, y: lastKnownGap });
+        result.push({ x: xVal, y: lastKnownGap, lap: pt.lap });
       }
     }
   }
   return result;
+}
+
+// ── Parse ts string to ms timestamp ─────────────────────────
+function tsToMs(tsStr) {
+  if (!tsStr) return null;
+  const m = tsStr.match(/(\d+):(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!m) return null;
+  let [, h, min, s, ap] = m;
+  h = parseInt(h); min = parseInt(min); s = parseInt(s);
+  if (ap) {
+    if (ap.toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (ap.toUpperCase() === 'AM' && h === 12) h = 0;
+  }
+  const d = new Date();
+  d.setHours(h, min, s, 0);
+  return d.getTime();
 }
 
 // ── Rebuild gap history from lap times ───────────────────────
@@ -696,9 +711,13 @@ function rebuildGapHistory() {
     td.laps.forEach(l => { l.gap1st = null; });
     td.latestGap1st = null;
   });
-  // One entry per lap per team (gap=null → calcRealGap uses lap time diff)
+  // One entry per lap per team with timestamp
   Object.entries(teamData).forEach(([num, td]) => {
-    gapHistory[num] = td.laps.map(l => ({ lap: l.lap, gap: l.gap1st ?? null }));
+    gapHistory[num] = td.laps.map(l => ({
+      lap: l.lap,
+      gap: l.gap1st ?? null,
+      t: l.tsMs || tsToMs(l.ts) || null
+    }));
   });
   saveToStorage();
   buildTeamFilterBar();
@@ -754,11 +773,23 @@ function renderGapChart(active) {
       };
     });
 
+  // our lap crossing markers — thin dark grey dotted lines
+  const refHist = gapHistory[refTeam] || [];
+  refHist.forEach(pt => {
+    const xVal = pt.t || pt.lap;
+    datasets.push({
+      label: `_ourlap_${pt.lap}`,
+      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
+      borderColor: '#333', borderWidth: 1, borderDash: [2, 4],
+      pointRadius: 0, fill: false, parsing: false, tension: 0,
+    });
+  });
+
   // zero reference line for "us"
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
     label: `${teamLabel(refTeam)} (us)`,
-    data: (gapHistory[refTeam] || teamData[refTeam]?.laps || []).map(l => ({ x: l.lap, y: 0 })),
+    data: refHist.map(pt => ({ x: pt.t || pt.lap, y: 0 })),
     borderColor: refCol,
     borderWidth: 2,
     borderDash: [4, 4],
@@ -796,10 +827,12 @@ function renderGapChart(active) {
     stints.slice(0, -1).forEach(stint => {
       if (!stint.length) return;
       const pitLap = stint[stint.length - 1].lap;
-      pitLabels.push({ x: pitLap, label: `L${pitLap}`, col, num });
+      const pitGhPt = (gapHistory[num] || []).find(p => p.lap === pitLap);
+      const pitX = pitGhPt?.t || pitLap;
+      pitLabels.push({ x: pitX, label: `L${pitLap}`, col, num });
       datasets.push({
         label: `_pit_gap_${num}_${pitLap}`,
-        data: [{ x: pitLap, y: yMin * 1.1 }, { x: pitLap, y: yMax * 1.1 }],
+        data: [{ x: pitX, y: yMin * 1.1 }, { x: pitX, y: yMax * 1.1 }],
         borderColor: col,
         borderWidth: 1.5,
         borderDash: [4, 3],
@@ -842,16 +875,17 @@ function renderGapChart(active) {
         legend: {
           labels: {
             color: '#ccc', font: { size: 11 }, boxWidth: 14,
-            filter: item => !item.text.startsWith('_pit_gap_')
+            filter: item => !item.text.startsWith('_pit_gap_') && !item.text.startsWith('_ourlap_')
           }
         },
         tooltip: {
           callbacks: {
             label: ctx => {
-              if (ctx.dataset.label.startsWith('_pit_gap_')) return null;
+              if (ctx.dataset.label.startsWith('_pit_gap_') || ctx.dataset.label.startsWith('_ourlap_')) return null;
               const s = ctx.parsed.y;
               const sign = s > 0 ? '+' : '';
-              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(3)}s`;
+              const lap = ctx.raw?.lap ? ` (L${ctx.raw.lap})` : '';
+              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${lap}`;
             }
           }
         }
@@ -859,8 +893,19 @@ function renderGapChart(active) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap', color: '#666' },
-          ticks: { color: '#888', stepSize: 1 }, grid: { color: '#222' }
+          title: { display: true, text: 'Time', color: '#666' },
+          ticks: {
+            color: '#888',
+            callback: v => {
+              if (v > 1e12) { // it's a timestamp
+                const d = new Date(v);
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              }
+              return `L${v}`; // fallback: lap number
+            },
+            maxTicksLimit: 16,
+          },
+          grid: { color: '#222' }
         },
         y: {
           title: { display: true, text: 'Gap (s)', color: '#666' },
@@ -951,11 +996,10 @@ function updateLapHistory(data) {
         const lbl = document.getElementById('longest-stint-label');
         if (lbl) lbl.textContent = `(longest observed: ${maxObservedStint})`;
       }
-      // Record gap at lap crossing — one point per lap
+      // Record gap at lap crossing — one point per lap with timestamp
       if (!gapHistory[num]) gapHistory[num] = [];
-      // Replace any existing entry for this lap
       const existingIdx = gapHistory[num].findIndex(p => p.lap === entry.lap);
-      const gapPt = { lap: entry.lap, gap: entry.gap1st ?? null };
+      const gapPt = { lap: entry.lap, gap: entry.gap1st ?? null, t: entry.tsMs || Date.now() };
       if (existingIdx >= 0) gapHistory[num][existingIdx] = gapPt;
       else gapHistory[num].push(gapPt);
     };
@@ -983,14 +1027,14 @@ function updateLapHistory(data) {
       const bestStr = cleanVal(r[C.bestLap]);
       const timeSec = parseTime(bestStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), gap1st });
+        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: Date.now(), gap1st });
       }
     } else if (lapCount > prev && lapCount > 0) {
       const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
         ? lastLapStr : cleanVal(r[C.bestLap]);
       const timeSec = parseTime(timeStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), gap1st });
+        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: Date.now(), gap1st });
       }
     }
 

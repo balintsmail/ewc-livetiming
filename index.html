@@ -459,6 +459,42 @@ function renderCharts() {
     });
   });
 
+  // ── Pit prediction vertical lines ──────────────────────────
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const allAvgPaces = active.map(num => stintAvgPace(teamData[num].stints?.slice(-1)[0] || [])).filter(Boolean);
+  const overallAvgPace = allAvgPaces.length ? allAvgPaces.reduce((a,b) => a+b,0) / allAvgPaces.length : 145;
+  const oneHourLaps = Math.ceil(3600 / overallAvgPace);
+  const currentMaxLap = Math.max(...active.flatMap(n => teamData[n].laps.map(l => l.lap)), 1);
+  const xMax = currentMaxLap + oneHourLaps;
+
+  // y range from actual lap data so pit lines don't distort axis
+  const allTimes = active.flatMap(n => teamData[n].laps.map(l => l.timeSec)).filter(Boolean);
+  const yMin = allTimes.length ? Math.min(...allTimes) * 0.995 : 130;
+  const yMax = allTimes.length ? Math.max(...allTimes) * 1.005 : 180;
+
+  active.forEach(num => {
+    const td = teamData[num];
+    const stints = td.stints || [[]];
+    const curStint = stints[stints.length - 1] || [];
+    const lastLap = td.laps.length ? td.laps[td.laps.length - 1].lap : 0;
+    const lapsLeft = Math.max(0, maxStint - curStint.length);
+    if (lapsLeft === 0) return;
+    const pitLap = lastLap + lapsLeft;
+    const col = colorForTeam(num);
+    datasets.push({
+      type: 'line',
+      label: `_pit_${num}`,
+      data: [{ x: pitLap, y: yMin }, { x: pitLap, y: yMax }],
+      borderColor: col,
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      fill: false,
+      parsing: false,
+      tension: 0,
+    });
+  });
+
   if (lapChart) lapChart.destroy();
   lapChart = new Chart(document.getElementById('chart-laptimes'), {
     type: 'scatter',
@@ -471,15 +507,17 @@ function renderCharts() {
         legend: {
           labels: {
             color: '#ccc', font: { size: 11 }, boxWidth: 14,
-            filter: item => !item.text.startsWith('_avg_')
+            filter: item => !item.text.startsWith('_avg_') && !item.text.startsWith('_pit_')
           }
         },
         tooltip: {
           callbacks: {
             label: ctx => {
-              if (ctx.dataset.label.startsWith('_avg_')) {
-                return ` 10-lap avg: ${secToStr(ctx.parsed.y)}`;
+              if (ctx.dataset.label.startsWith('_pit_')) {
+                const num = ctx.dataset.label.replace('_pit_','');
+                return ` #${num} predicted pit`;
               }
+              if (ctx.dataset.label.startsWith('_avg_')) return ` 10-lap avg: ${secToStr(ctx.parsed.y)}`;
               const d = ctx.raw;
               const l = d.lap;
               const excl = d.excluded ? ' ⚠ in/out' : '';
@@ -491,8 +529,10 @@ function renderCharts() {
       scales: {
         x: {
           type: 'linear',
+          min: 1,
+          max: xMax,
           title: { display: true, text: 'Lap', color: '#666' },
-          ticks: { color: '#888', stepSize: 1 },
+          ticks: { color: '#888', stepSize: Math.max(1, Math.floor(xMax / 20)) },
           grid: { color: '#222' }
         },
         y: {

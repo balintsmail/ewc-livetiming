@@ -175,7 +175,7 @@
         <span id="avg-window-label" style="color:#aaa;min-width:44px">10 laps</span>
       </span>
     </h3>
-    <div class="chart-wrap"><canvas id="chart-laptimes"></canvas></div>
+    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes"></canvas></div>
   </div>
 
   <div class="chart-card">
@@ -636,7 +636,7 @@ function renderCharts() {
         },
         y: {
           min: 140,
-          max: 148,
+          max: 170,
           title: { display: true, text: 'Lap Time', color: '#666' },
           ticks: { color: '#888', callback: v => secToStr(v) },
           grid: { color: '#222' }

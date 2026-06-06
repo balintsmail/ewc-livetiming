@@ -814,8 +814,9 @@ function updateLapHistory(data) {
         const avgLap = allBests.length ? allBests.reduce((a,b)=>a+b,0)/allBests.length : 143;
         gap1st = parseInt(lpMatch[1]) * avgLap;
       } else {
-        const v = parseFloat(gap1stRaw);
-        gap1st = isNaN(v) ? null : v;
+        // Try parseTime first (handles "1:04.739" → 64.739s), then parseFloat for plain seconds
+        const v = parseTime(gap1stRaw) ?? parseFloat(gap1stRaw);
+        gap1st = (v === null || isNaN(v)) ? null : v;
       }
     }
 

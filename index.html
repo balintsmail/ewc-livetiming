@@ -675,13 +675,13 @@ function calcRealGap(numOther, numRef) {
 
     if (pt.gap !== null && refGap !== null) {
       lastKnownGap = +(pt.gap - refGap).toFixed(3);
-      result.push({ x: xVal, y: lastKnownGap, lap: pt.lap });
+      result.push({ x: pt.lap, y: lastKnownGap, t: xVal });
     } else {
       const otherLap = otherLaps.find(l => l.lap === pt.lap);
       const refLap   = refLaps.find(l => l.lap === pt.lap);
       if (otherLap?.timeSec && refLap?.timeSec) {
         lastKnownGap = +(lastKnownGap + (otherLap.timeSec - refLap.timeSec)).toFixed(3);
-        result.push({ x: xVal, y: lastKnownGap, lap: pt.lap });
+        result.push({ x: pt.lap, y: lastKnownGap, t: xVal });
       }
     }
   }
@@ -778,7 +778,7 @@ function renderGapChart(active) {
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
     label: `${teamLabel(refTeam)} (us)`,
-    data: refHist.map(pt => ({ x: pt.t || pt.lap, y: 0 })),
+    data: refHist.map(pt => ({ x: pt.lap, y: 0 })),
     borderColor: refCol,
     borderWidth: 2,
     borderDash: [4, 4],
@@ -809,10 +809,9 @@ function renderGapChart(active) {
 
   // Our lap crossing markers — thin dark grey dotted vertical lines
   refHist.forEach(pt => {
-    const xVal = pt.t || pt.lap;
     datasets.push({
       label: `_ourlap_${pt.lap}`,
-      data: [{ x: xVal, y: yMin * 1.5 }, { x: xVal, y: yMax * 1.5 }],
+      data: [{ x: pt.lap, y: yMin * 1.5 }, { x: pt.lap, y: yMax * 1.5 }],
       borderColor: '#2a2a2a', borderWidth: 1, borderDash: [2, 4],
       pointRadius: 0, fill: false, parsing: false, tension: 0,
     });
@@ -826,12 +825,10 @@ function renderGapChart(active) {
     stints.slice(0, -1).forEach(stint => {
       if (!stint.length) return;
       const pitLap = stint[stint.length - 1].lap;
-      const pitGhPt = (gapHistory[num] || []).find(p => p.lap === pitLap);
-      const pitX = pitGhPt?.t || pitLap;
-      pitLabels.push({ x: pitX, label: `L${pitLap}`, col, num });
+      pitLabels.push({ x: pitLap, label: `L${pitLap}`, col, num });
       datasets.push({
         label: `_pit_gap_${num}_${pitLap}`,
-        data: [{ x: pitX, y: yMin * 1.1 }, { x: pitX, y: yMax * 1.1 }],
+        data: [{ x: pitLap, y: yMin * 1.1 }, { x: pitLap, y: yMax * 1.1 }],
         borderColor: col,
         borderWidth: 1.5,
         borderDash: [4, 3],
@@ -883,8 +880,10 @@ function renderGapChart(active) {
               if (ctx.dataset.label.startsWith('_pit_gap_') || ctx.dataset.label.startsWith('_ourlap_')) return null;
               const s = ctx.parsed.y;
               const sign = s > 0 ? '+' : '';
-              const lap = ctx.raw?.lap ? ` (L${ctx.raw.lap})` : '';
-              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${lap}`;
+              const timeStr = ctx.raw?.t > 1e12
+                ? ' @ ' + new Date(ctx.raw.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+                : '';
+              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${timeStr}`;
             }
           }
         }
@@ -892,18 +891,8 @@ function renderGapChart(active) {
       scales: {
         x: {
           type: 'linear',
-          title: { display: true, text: 'Time', color: '#666' },
-          ticks: {
-            color: '#888',
-            callback: v => {
-              if (v > 1e12) { // it's a timestamp
-                const d = new Date(v);
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              }
-              return `L${v}`; // fallback: lap number
-            },
-            maxTicksLimit: 16,
-          },
+          title: { display: true, text: 'Lap', color: '#666' },
+          ticks: { color: '#888', stepSize: 1 },
           grid: { color: '#222' }
         },
         y: {

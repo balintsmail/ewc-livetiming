@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EWC Live Timing</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; }
+  header { background: #111; padding: 10px 16px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #333; }
+  header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+  #session-info { display: flex; gap: 20px; font-size: 12px; color: #aaa; }
+  #session-info span b { color: #fff; }
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; display: inline-block; margin-right: 6px; }
+  #status-dot.live { background: #22c55e; box-shadow: 0 0 6px #22c55e; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid #333; }
+  .tab { padding: 6px 14px; cursor: pointer; border-radius: 6px 6px 0 0; background: #1a1a1a; color: #888; border: 1px solid #333; border-bottom: none; font-size: 12px; }
+  .tab.active { background: #1e3a5f; color: #fff; border-color: #2563eb; }
+
+  .panel { display: none; padding: 14px 16px; }
+  .panel.active { display: block; }
+
+  /* ── Standings ── */
+  #filter-bar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .filter-btn { padding: 4px 12px; border-radius: 4px; cursor: pointer; background: #1a1a1a; color: #888; border: 1px solid #333; font-size: 12px; }
+  .filter-btn.active { background: #1e3a5f; color: #fff; border-color: #2563eb; }
+  #copy-btn { margin-left: auto; padding: 5px 14px; background: #16a34a; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  #copy-btn:hover { background: #15803d; }
+  #copy-feedback { font-size: 11px; color: #22c55e; margin-left: 8px; opacity: 0; transition: opacity .3s; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { background: #1a2533; color: #90b4d6; font-weight: 600; padding: 6px 8px; text-align: left; position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #1f1f1f; transition: background .15s; }
+  tbody tr:hover { background: #1a1a2e; }
+  td { padding: 5px 8px; white-space: nowrap; }
+  td.pos { text-align: center; font-weight: 700; width: 36px; }
+  td.num { text-align: center; width: 36px; }
+  td.time { text-align: right; font-variant-numeric: tabular-nums; font-family: monospace; }
+  .cat-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .cat-EWC { background: #1d4ed8; color: #fff; }
+  .cat-SST { background: #b45309; color: #fff; }
+  .cat-PRD { background: #15803d; color: #fff; }
+  .best { color: #a855f7; font-weight: 700; }
+  .pit { color: #f97316; }
+  td.gap { text-align: right; color: #94a3b8; font-family: monospace; }
+  tr.p1 td.pos { color: #fbbf24; }
+  tr.p2 td.pos { color: #d1d5db; }
+  tr.p3 td.pos { color: #cd7c2f; }
+
+  /* ── Charts tab ── */
+  .chart-card { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  .chart-card h3 { font-size: 12px; color: #90b4d6; margin-bottom: 10px; }
+  .chart-wrap { position: relative; height: 340px; }
+
+  /* Team filter toggles */
+  #team-filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  #team-filter-bar label { font-size: 11px; color: #aaa; margin-right: 4px; }
+  .team-toggle {
+    padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    border: 2px solid transparent; font-size: 12px; font-weight: 600;
+    background: #1a1a1a; color: #888; transition: all .15s;
+  }
+  .team-toggle.on { color: #fff; }
+
+  /* Lap table */
+  #lap-table-wrap { overflow-x: auto; }
+  #lap-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  #lap-table thead th {
+    background: #1a2533; color: #90b4d6; font-weight: 600;
+    padding: 6px 10px; text-align: center; white-space: nowrap;
+    position: sticky; top: 0; z-index: 1; border: 1px solid #222;
+  }
+  #lap-table thead th.th-lap { text-align: left; color: #555; min-width: 52px; }
+  #lap-table tbody td {
+    padding: 5px 10px; text-align: center; border: 1px solid #1e1e1e;
+    font-family: monospace; white-space: nowrap;
+  }
+  #lap-table tbody td.td-lap { color: #555; font-family: inherit; text-align: left; }
+  #lap-table tbody tr:hover { background: #141414; }
+  .lap-entry { display: flex; gap: 5px; align-items: baseline; }
+  .lap-initials { font-size: 10px; color: #aaa; font-family: inherit; }
+  .lap-time { font-variant-numeric: tabular-nums; }
+  .lap-best { color: #a855f7; font-weight: 700; }
+  .lap-new { animation: highlight .8s ease-out; }
+  @keyframes highlight { from { background: #1e3a1e; } to { background: transparent; } }
+
+  /* Messages */
+  #messages { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+  #messages span { color: #fbbf24; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div><span id="status-dot"></span></div>
+  <h1 id="title">Loading...</h1>
+  <div id="session-info">
+    <div>Time: <b id="clock">--:--:--</b></div>
+    <div>Remaining: <b id="remaining">--:--:--</b></div>
+    <div>Updated: <b id="last-update">—</b></div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('standings')">Standings</div>
+  <div class="tab" onclick="switchTab('charts')">Charts</div>
+</div>
+
+<!-- STANDINGS TAB -->
+<div id="tab-standings" class="panel active">
+  <div id="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('Overall')">Overall</button>
+    <button class="filter-btn" onclick="setFilter('EWC')">EWC</button>
+    <button class="filter-btn" onclick="setFilter('SST')">SST</button>
+    <button class="filter-btn" onclick="setFilter('PRD')">PRD</button>
+    <button id="copy-btn" onclick="copyForSheets()">Copy for Google Sheets</button>
+    <span id="copy-feedback">Copied!</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table id="standings-table">
+      <thead>
+        <tr>
+          <th>Pos</th><th>No.</th><th>Cat</th><th>Team</th><th>Rider</th><th>Bike</th>
+          <th>S1</th><th>S2</th><th>S3</th><th>Last Lap</th><th>Best Lap</th>
+          <th>Gap 1st</th><th>Laps</th><th>Pits</th>
+        </tr>
+      </thead>
+      <tbody id="standings-body"></tbody>
+    </table>
+  </div>
+  <div id="messages"></div>
+</div>
+
+<!-- CHARTS TAB -->
+<div id="tab-charts" class="panel">
+  <div id="team-filter-bar">
+    <label>Teams:</label>
+    <!-- populated by JS -->
+  </div>
+
+  <div class="chart-card">
+    <h3>Lap Times by Team</h3>
+    <div class="chart-wrap"><canvas id="chart-laptimes"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <h3>Lap Time Table</h3>
+    <div id="lap-table-wrap">
+      <table id="lap-table">
+        <thead><tr id="lap-table-head"></tr></thead>
+        <tbody id="lap-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://fimewc.live-frclassification.fr/r1.json';
+const INTERVAL = 10000;
+
+// Column indices
+const C = { status:0, pos:1, catPos:2, num:3, cat:4, nat:5, team:6, rider:7, riderNat:8, bike:9,
+             s1:10, s2:11, s3:12, lastLap:13, bestLap:14, gap:15, gapCat:16, laps:17, pits:18 };
+
+const DEFAULT_TEAMS = ['38','27','8','25','49','18','77'];
+
+// Persistent colors per team number
+const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
+const teamColors = {};
+
+// { num: { name, rider, cat, laps: [{lap, timeSec, timeStr, initials, ts}] } }
+const teamData = {};
+// previous lap counts to detect new laps
+const prevLapCount = {};
+// which teams are toggled on
+let activeTeams = new Set(DEFAULT_TEAMS);
+
+let rawData = null;
+let currentFilter = 'Overall';
+let lapChart = null;
+
+// ── Utilities ────────────────────────────────────────────────
+function cleanVal(s) { return s ? s.replace(/{[^}]+}/g, '').trim() : ''; }
+function isBest(s) { return s && s.includes('{meilleur-temps}'); }
+function isPit(s) { return s && s.includes('{entree-stand}'); }
+
+function parseTime(s) {
+  if (!s || s === '-') return null;
+  s = s.replace(/{[^}]+}/g, '').trim();
+  if (!s || s === '-') return null;
+  const p = s.split(':').map(Number);
+  if (p.length === 2) return p[0] * 60 + p[1];
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  return null;
+}
+
+function secToStr(s) {
+  if (s === null || s === undefined || isNaN(s)) return '-';
+  const m = Math.floor(s / 60);
+  const sec = (s - m * 60).toFixed(3).padStart(6, '0');
+  return `${m}:${sec}`;
+}
+
+function msToTime(ms) {
+  if (!ms && ms !== 0) return '--:--:--';
+  const t = Math.floor(ms / 1000);
+  return [Math.floor(t/3600), Math.floor((t%3600)/60), t%60].map(x => String(x).padStart(2,'0')).join(':');
+}
+
+function initials(riderName) {
+  // "CRESSON Loris" → "LC"
+  return riderName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0,3);
+}
+
+function catColor(cat) {
+  return { EWC: '#3b82f6', SST: '#f59e0b', PRD: '#22c55e' }[cat] || '#94a3b8';
+}
+
+function colorForTeam(num) {
+  if (!teamColors[num]) {
+    const idx = Object.keys(teamColors).length % PALETTE.length;
+    teamColors[num] = PALETTE[idx];
+  }
+  return teamColors[num];
+}
+
+// ── Tab switching ────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active', ['standings','charts'][i] === name));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'charts') renderCharts();
+}
+
+// ── Standings filter ─────────────────────────────────────────
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('#filter-bar .filter-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent === f));
+  if (rawData) renderStandings(rawData);
+}
+
+// ── Standings render ─────────────────────────────────────────
+function renderStandings(data) {
+  const rows = data.Donnees.filter(r =>
+    currentFilter === 'Overall' || cleanVal(r[C.cat]) === currentFilter);
+  document.getElementById('standings-body').innerHTML = rows.map(r => {
+    const pos = cleanVal(r[C.pos]);
+    const posClass = pos==='1'?'p1':pos==='2'?'p2':pos==='3'?'p3':'';
+    const s1c = `<td class="time${isBest(r[C.s1])?' best':''}">${cleanVal(r[C.s1])}</td>`;
+    const s2c = `<td class="time${isBest(r[C.s2])?' best':''}">${cleanVal(r[C.s2])}</td>`;
+    const s3c = `<td class="time${isBest(r[C.s3])?' best':''}">${cleanVal(r[C.s3])}</td>`;
+    const llc = isPit(r[C.lastLap])
+      ? `<td class="time pit">Pit In</td>`
+      : `<td class="time">${cleanVal(r[C.lastLap])}</td>`;
+    const cat = cleanVal(r[C.cat]);
+    return `<tr class="${posClass}">
+      <td class="pos">${pos}</td>
+      <td class="num">${cleanVal(r[C.num])}</td>
+      <td><span class="cat-badge cat-${cat}">${cat}</span></td>
+      <td>${cleanVal(r[C.team])}</td>
+      <td>${cleanVal(r[C.rider])}</td>
+      <td>${cleanVal(r[C.bike])}</td>
+      ${s1c}${s2c}${s3c}${llc}
+      <td class="time">${cleanVal(r[C.bestLap])}</td>
+      <td class="gap">${cleanVal(r[C.gap])}</td>
+      <td class="time">${cleanVal(r[C.laps])}</td>
+      <td class="time">${cleanVal(r[C.pits])}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Team filter bar (charts tab) ─────────────────────────────
+function buildTeamFilterBar() {
+  const bar = document.getElementById('team-filter-bar');
+  // keep label
+  const label = bar.querySelector('label');
+  bar.innerHTML = '';
+  bar.appendChild(label);
+
+  const allNums = Object.keys(teamData).sort((a,b) => {
+    // put default teams first
+    const ai = DEFAULT_TEAMS.indexOf(a), bi = DEFAULT_TEAMS.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return parseInt(a) - parseInt(b);
+  });
+
+  allNums.forEach(num => {
+    const btn = document.createElement('button');
+    btn.className = 'team-toggle' + (activeTeams.has(num) ? ' on' : '');
+    btn.textContent = `#${num}`;
+    const col = colorForTeam(num);
+    if (activeTeams.has(num)) {
+      btn.style.borderColor = col;
+      btn.style.background = col + '22';
+      btn.style.color = col;
+    }
+    btn.onclick = () => {
+      if (activeTeams.has(num)) {
+        activeTeams.delete(num);
+        btn.classList.remove('on');
+        btn.style.borderColor = 'transparent';
+        btn.style.background = '#1a1a1a';
+        btn.style.color = '#888';
+      } else {
+        activeTeams.add(num);
+        btn.classList.add('on');
+        btn.style.borderColor = col;
+        btn.style.background = col + '22';
+        btn.style.color = col;
+      }
+      renderCharts();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+// ── Lap time chart ───────────────────────────────────────────
+function renderCharts() {
+  const active = [...activeTeams].filter(n => teamData[n]);
+  if (!active.length) return;
+
+  // Build unified x-axis: all lap numbers across active teams
+  const maxLap = Math.max(...active.map(n => teamData[n].laps.length));
+  if (maxLap === 0) return;
+
+  const datasets = active.map(num => {
+    const td = teamData[num];
+    const col = colorForTeam(num);
+    // x = lap index (1-based), y = timeSec
+    const pts = td.laps.map((l, i) => ({ x: l.lap, y: l.timeSec }));
+    return {
+      label: `#${num} ${td.name.split(' ').pop()}`,
+      data: pts,
+      borderColor: col,
+      backgroundColor: col + '33',
+      tension: 0.3,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      fill: false,
+    };
+  });
+
+  // all lap numbers present
+  const allLaps = [...new Set(active.flatMap(n => teamData[n].laps.map(l => l.lap)))].sort((a,b)=>a-b);
+
+  if (lapChart) lapChart.destroy();
+  lapChart = new Chart(document.getElementById('chart-laptimes'), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      parsing: false,
+      plugins: {
+        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const num = active[ctx.datasetIndex];
+              const td = teamData[num];
+              const lap = td.laps.find(l => l.lap === ctx.parsed.x);
+              return ` ${ctx.dataset.label}: ${lap ? lap.timeStr : secToStr(ctx.parsed.y)}${lap ? '  (' + lap.initials + ')' : ''}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Lap', color: '#666' },
+          ticks: { color: '#888', stepSize: 1 },
+          grid: { color: '#222' }
+        },
+        y: {
+          title: { display: true, text: 'Lap Time', color: '#666' },
+          ticks: { color: '#888', callback: v => secToStr(v) },
+          grid: { color: '#222' }
+        }
+      }
+    }
+  });
+
+  renderLapTable(active);
+}
+
+// ── Lap table ────────────────────────────────────────────────
+function renderLapTable(active) {
+  // header
+  const head = document.getElementById('lap-table-head');
+  head.innerHTML = `<th class="th-lap">Lap</th>` +
+    active.map(num => {
+      const col = colorForTeam(num);
+      const td = teamData[num];
+      return `<th style="color:${col}">#${num}<br><span style="font-weight:400;font-size:10px;color:#666">${td.name.length > 20 ? td.name.slice(0,18)+'…' : td.name}</span></th>`;
+    }).join('');
+
+  // all lap numbers, newest first
+  const allLaps = [...new Set(active.flatMap(n => teamData[n].laps.map(l => l.lap)))].sort((a,b)=>b-a);
+
+  // find best per team
+  const bestPerTeam = {};
+  active.forEach(num => {
+    const times = teamData[num].laps.map(l => l.timeSec).filter(Boolean);
+    bestPerTeam[num] = times.length ? Math.min(...times) : null;
+  });
+
+  const tbody = document.getElementById('lap-table-body');
+  tbody.innerHTML = allLaps.map(lap => {
+    const cells = active.map(num => {
+      const entry = teamData[num].laps.find(l => l.lap === lap);
+      if (!entry || !entry.timeSec) return `<td>—</td>`;
+      const isBestLap = bestPerTeam[num] !== null && Math.abs(entry.timeSec - bestPerTeam[num]) < 0.001;
+      const col = colorForTeam(num);
+      return `<td>
+        <span class="lap-initials" style="color:${col}88">${entry.initials}</span>
+        <span class="lap-time${isBestLap?' lap-best':''}">${entry.timeStr}</span>
+      </td>`;
+    }).join('');
+    return `<tr><td class="td-lap">Lap ${lap}</td>${cells}</tr>`;
+  }).join('');
+}
+
+// ── Lap history tracking ─────────────────────────────────────
+function updateLapHistory(data) {
+  data.Donnees.forEach(r => {
+    const num = cleanVal(r[C.num]);
+    const rider = cleanVal(r[C.rider]);
+    const lapCount = parseInt(cleanVal(r[C.laps])) || 0;
+    const lastLapRaw = r[C.lastLap];
+    const lastLapStr = cleanVal(lastLapRaw);
+    const cat = cleanVal(r[C.cat]);
+
+    if (!teamData[num]) {
+      teamData[num] = { name: cleanVal(r[C.team]), rider, cat, laps: [] };
+      colorForTeam(num); // assign color
+    } else {
+      teamData[num].rider = rider;
+    }
+
+    const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
+
+    if (lapCount > prev && lapCount > 0 && !isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-') {
+      const timeSec = parseTime(lastLapStr);
+      if (timeSec !== null) {
+        teamData[num].laps.push({
+          lap: lapCount,
+          timeSec,
+          timeStr: lastLapStr,
+          initials: initials(rider),
+          ts: new Date().toLocaleTimeString()
+        });
+      }
+    }
+
+    prevLapCount[num] = lapCount;
+  });
+}
+
+// ── Copy for Sheets ──────────────────────────────────────────
+function copyForSheets() {
+  if (!rawData) return;
+  const headers = ['Pos','No.','Cat','Team','Rider','Bike','S1','S2','S3','Last Lap','Best Lap','Gap 1st','Laps','Pits'];
+  const rows = rawData.Donnees.filter(r =>
+    currentFilter === 'Overall' || cleanVal(r[C.cat]) === currentFilter);
+  const lines = [headers.join('\t'), ...rows.map(r => [
+    cleanVal(r[C.pos]), cleanVal(r[C.num]), cleanVal(r[C.cat]),
+    cleanVal(r[C.team]), cleanVal(r[C.rider]), cleanVal(r[C.bike]),
+    cleanVal(r[C.s1]), cleanVal(r[C.s2]), cleanVal(r[C.s3]),
+    isPit(r[C.lastLap]) ? 'Pit In' : cleanVal(r[C.lastLap]),
+    cleanVal(r[C.bestLap]), cleanVal(r[C.gap]),
+    cleanVal(r[C.laps]), cleanVal(r[C.pits])
+  ].join('\t'))];
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const fb = document.getElementById('copy-feedback');
+    fb.style.opacity = 1;
+    setTimeout(() => fb.style.opacity = 0, 2000);
+  });
+}
+
+// ── Main fetch ───────────────────────────────────────────────
+async function fetchData() {
+  try {
+    const res = await fetch(`${API}?t=${Date.now()}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    rawData = data;
+
+    document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
+    document.getElementById('clock').textContent = new Date(data.HeureJourUTC).toLocaleTimeString();
+    document.getElementById('remaining').textContent = msToTime(data.TempsRestant);
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    document.getElementById('status-dot').classList.add('live');
+
+    updateLapHistory(data);
+    renderStandings(data);
+    buildTeamFilterBar();
+
+    if (document.getElementById('tab-charts').classList.contains('active')) renderCharts();
+
+    if (data.Messages && data.Messages.length) {
+      document.getElementById('messages').innerHTML =
+        data.Messages.map(m => {
+          const [t, ...rest] = m.split('>');
+          return `<span>${t}</span>${rest.join('>')}`;
+        }).join(' &nbsp;|&nbsp; ');
+    }
+  } catch (e) {
+    document.getElementById('status-dot').classList.remove('live');
+    console.error('Fetch error:', e);
+  }
+}
+
+// Init default active teams before first fetch
+DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
+
+fetchData();
+setInterval(fetchData, INTERVAL);
+</script>
+</body>
+</html>

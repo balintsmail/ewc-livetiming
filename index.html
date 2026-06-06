@@ -158,10 +158,7 @@
 </div>
 
 <script>
-const API_DIRECT = 'https://fimewc.live-frclassification.fr/r1.json';
-const API_PROXY  = 'https://corsproxy.io/?url=https://fimewc.live-frclassification.fr/r1.json';
-const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? API_DIRECT : API_PROXY;
+const API = 'https://corsproxy.io/?url=https://fimewc.live-frclassification.fr/r1.json';
 const INTERVAL = 1000;
 
 // Column indices

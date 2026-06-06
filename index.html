@@ -166,6 +166,16 @@
   </div>
 
   <div class="chart-card">
+    <h3>Gap to Us (cumulative seconds)
+      <span style="float:right;font-size:11px;color:#666;font-weight:400">
+        Reference:
+        <span id="ref-team-bar" style="display:inline-flex;gap:4px;margin-left:6px"></span>
+      </span>
+    </h3>
+    <div class="chart-wrap"><canvas id="chart-gap"></canvas></div>
+  </div>
+
+  <div class="chart-card">
     <h3>Lap Time Table</h3>
     <div id="lap-table-wrap">
       <table id="lap-table">
@@ -239,7 +249,9 @@ let activeTeams = new Set(DEFAULT_TEAMS);
 let rawData = null;
 let currentFilter = 'Overall';
 let lapChart = null;
+let gapChart = null;
 let stintChart = null;
+let refTeam = DEFAULT_TEAMS[0]; // "us"
 let maxObservedStint = 0;
 const prevPitCount = {};
 
@@ -492,7 +504,109 @@ function renderCharts() {
     }
   });
 
+  if (!refTeam || !activeTeams.has(refTeam)) refTeam = active[0];
+  buildRefTeamBar(active);
+  renderGapChart(active);
   renderLapTable(active);
+}
+
+// ── Gap chart ─────────────────────────────────────────────────
+function buildRefTeamBar(active) {
+  const bar = document.getElementById('ref-team-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  active.forEach(num => {
+    const btn = document.createElement('button');
+    const col = colorForTeam(num);
+    const isRef = num === refTeam;
+    btn.textContent = `#${num}`;
+    btn.style.cssText = `padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid ${isRef ? col : '#333'};background:${isRef ? col+'33' : '#1a1a1a'};color:${isRef ? col : '#555'};`;
+    btn.onclick = () => { refTeam = num; renderGapChart(active); buildRefTeamBar(active); };
+    bar.appendChild(btn);
+  });
+}
+
+function calcCumulativeGap(teamLaps, refLaps) {
+  let cum = 0;
+  return teamLaps.map(lap => {
+    const ref = refLaps.find(l => l.lap === lap.lap);
+    if (ref && lap.timeSec && ref.timeSec) cum += lap.timeSec - ref.timeSec;
+    return { x: lap.lap, y: +cum.toFixed(3) };
+  });
+}
+
+function renderGapChart(active) {
+  if (!active.length || !teamData[refTeam]) return;
+  const refLaps = teamData[refTeam].laps;
+
+  const datasets = active
+    .filter(num => num !== refTeam)
+    .map(num => {
+      const col = colorForTeam(num);
+      const td = teamData[num];
+      const pts = calcCumulativeGap(td.laps, refLaps);
+      return {
+        label: `#${num} ${td.name.split(' ').pop()}`,
+        data: pts,
+        borderColor: col,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        fill: false,
+        parsing: false,
+      };
+    });
+
+  // zero reference line for "us"
+  const refCol = colorForTeam(refTeam);
+  datasets.unshift({
+    label: `#${refTeam} (us)`,
+    data: teamData[refTeam].laps.map(l => ({ x: l.lap, y: 0 })),
+    borderColor: refCol,
+    borderWidth: 2,
+    borderDash: [4, 4],
+    pointRadius: 0,
+    tension: 0,
+    fill: false,
+    parsing: false,
+  });
+
+  if (gapChart) gapChart.destroy();
+  gapChart = new Chart(document.getElementById('chart-gap'), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+      plugins: {
+        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const s = ctx.parsed.y;
+              const sign = s > 0 ? '+' : '';
+              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(3)}s`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Lap', color: '#666' },
+          ticks: { color: '#888', stepSize: 1 }, grid: { color: '#222' }
+        },
+        y: {
+          title: { display: true, text: 'Gap (s)', color: '#666' },
+          ticks: { color: '#888', callback: v => (v > 0 ? '+' : '') + v.toFixed(1) + 's' },
+          grid: { color: '#222' },
+          // zero line highlight
+          afterDataLimits: scale => { scale.min = Math.min(scale.min, -1); scale.max = Math.max(scale.max, 1); }
+        }
+      }
+    }
+  });
 }
 
 // ── Lap table ────────────────────────────────────────────────

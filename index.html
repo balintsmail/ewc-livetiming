@@ -802,8 +802,22 @@ function updateLapHistory(data) {
     };
 
     const gap1stRaw = cleanVal(r[C.gap]);
-    // null = no data (pit, first lap, leader shows '-'); 0 = actually 0
-    const gap1st = (gap1stRaw === '-' || gap1stRaw === '') ? null : (parseFloat(gap1stRaw) || 0);
+    // null = no data; handle "2 Lp." (lapped) by converting to seconds
+    let gap1st = null;
+    if (gap1stRaw && gap1stRaw !== '-') {
+      const lpMatch = gap1stRaw.match(/^(\d+)\s*Lp\./i);
+      if (lpMatch) {
+        // N laps down → N × current avg lap time
+        const allBests = Object.values(teamData)
+          .map(td => { const b = td.laps.map(l=>l.timeSec).filter(Boolean); return b.length ? Math.min(...b) : null; })
+          .filter(Boolean);
+        const avgLap = allBests.length ? allBests.reduce((a,b)=>a+b,0)/allBests.length : 143;
+        gap1st = parseInt(lpMatch[1]) * avgLap;
+      } else {
+        const v = parseFloat(gap1stRaw);
+        gap1st = isNaN(v) ? null : v;
+      }
+    }
 
     if (firstSeen && lapCount > 0) {
       const bestStr = cleanVal(r[C.bestLap]);

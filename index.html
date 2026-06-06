@@ -166,7 +166,15 @@
   </div>
 
   <div class="chart-card">
-    <h3>Lap Times by Team</h3>
+    <h3>Lap Times by Team
+      <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
+        Avg window:
+        <input type="range" id="avg-window-slider" min="1" max="22" value="10" step="1"
+          style="width:100px;accent-color:#3b82f6"
+          oninput="document.getElementById('avg-window-label').textContent=this.value+' laps'; renderCharts()">
+        <span id="avg-window-label" style="color:#aaa;min-width:44px">10 laps</span>
+      </span>
+    </h3>
     <div class="chart-wrap"><canvas id="chart-laptimes"></canvas></div>
   </div>
 
@@ -440,6 +448,20 @@ function buildTeamFilterBar() {
   });
 }
 
+// ── Short label for chart legend ─────────────────────────────
+function teamLabel(num) {
+  const td = teamData[num];
+  if (!td) return `#${num}`;
+  const words = (td.name || '').trim().split(/\s+/);
+  // If first word is generic ("TEAM","Team"), use first two words
+  let short = words[0]?.toUpperCase() === 'TEAM' && words[1]
+    ? words[0] + ' ' + words[1]
+    : words[0] || '';
+  short = short.slice(0, 12);
+  const riderFirst = (td.rider || '').trim().split(/\s+/).slice(-1)[0] || '';
+  return `#${num} ${short} / ${riderFirst}`;
+}
+
 // ── Moving average helpers ────────────────────────────────────
 function markInOutLaps(laps) {
   if (!laps.length) return;
@@ -470,10 +492,11 @@ function renderCharts() {
   active.forEach(num => {
     const td = teamData[num];
     const col = colorForTeam(num);
-    const label = `#${num} ${td.name.split(' ').pop()}`;
+    const label = teamLabel(num);
+    const avgWindow = parseInt(document.getElementById('avg-window-slider')?.value) || 10;
 
     markInOutLaps(td.laps);
-    const avgs = movingAvg(td.laps, 10);
+    const avgs = movingAvg(td.laps, avgWindow);
 
     // Scatter: individual lap dots
     datasets.push({
@@ -720,7 +743,7 @@ function renderGapChart(active) {
       const td = teamData[num];
       const pts = calcRealGap(num, refTeam);
       return {
-        label: `#${num} ${td.name.split(' ').pop()}`,
+        label: teamLabel(num),
         data: pts,
         borderColor: col,
         backgroundColor: 'transparent',
@@ -736,7 +759,7 @@ function renderGapChart(active) {
   // zero reference line for "us"
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
-    label: `#${refTeam} (us)`,
+    label: `${teamLabel(refTeam)} (us)`,
     data: (gapHistory[refTeam] || teamData[refTeam]?.laps || []).map(l => ({ x: l.lap, y: 0 })),
     borderColor: refCol,
     borderWidth: 2,

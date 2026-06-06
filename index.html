@@ -698,9 +698,9 @@ function rebuildGapHistory() {
     td.laps.forEach(l => { l.gap1st = null; });
     td.latestGap1st = null;
   });
-  // One null-gap entry per lap per team → calcRealGap accumulates from lap times
+  // One entry per lap per team (gap=null → calcRealGap uses lap time diff)
   Object.entries(teamData).forEach(([num, td]) => {
-    gapHistory[num] = td.laps.map(l => ({ lap: l.lap, gap: null }));
+    gapHistory[num] = td.laps.map(l => ({ lap: l.lap, gap: l.gap1st ?? null }));
   });
   saveToStorage();
   buildTeamFilterBar();
@@ -936,6 +936,13 @@ function updateLapHistory(data) {
         const lbl = document.getElementById('longest-stint-label');
         if (lbl) lbl.textContent = `(longest observed: ${maxObservedStint})`;
       }
+      // Record gap at lap crossing — one point per lap
+      if (!gapHistory[num]) gapHistory[num] = [];
+      // Replace any existing entry for this lap
+      const existingIdx = gapHistory[num].findIndex(p => p.lap === entry.lap);
+      const gapPt = { lap: entry.lap, gap: entry.gap1st ?? null };
+      if (existingIdx >= 0) gapHistory[num][existingIdx] = gapPt;
+      else gapHistory[num].push(gapPt);
     };
 
     const gap1stRaw = cleanVal(r[C.gap]);
@@ -974,14 +981,6 @@ function updateLapHistory(data) {
 
     // always update latest gap on the team record for live display
     teamData[num].latestGap1st = gap1st;
-
-    // Record gap snapshot every poll (even between laps)
-    if (!gapHistory[num]) gapHistory[num] = [];
-    const lastEntry = gapHistory[num].slice(-1)[0];
-    // store whenever lap changes or gap changes meaningfully (>0.1s)
-    if (!lastEntry || lastEntry.lap !== lapCount || Math.abs((lastEntry.gap || 0) - gap1st) > 0.1) {
-      gapHistory[num].push({ lap: lapCount, gap: gap1st });
-    }
 
     prevLapCount[num] = lapCount;
   });

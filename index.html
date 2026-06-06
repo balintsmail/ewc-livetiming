@@ -282,6 +282,8 @@ let rawData = null;
 let currentFilter = 'Overall';
 let lapChart = null;
 let gapChart = null;
+// gapHistory[num] = [{lap, gap}] — recorded every poll, independent of lap completion
+const gapHistory = {};
 let stintChart = null;
 let refTeam = DEFAULT_TEAMS[0]; // "us"
 let maxObservedStint = 0;
@@ -585,14 +587,19 @@ function renderCharts() {
 }
 
 // ── Gap chart ─────────────────────────────────────────────────
-// Use real API gap (Ecart1er): gap between teams = other.gap1st - ref.gap1st
-// Positive = other team is behind us; Negative = other team is ahead
-function calcRealGap(teamLaps, refLaps) {
-  return teamLaps.map(lap => {
-    const refLap = refLaps.find(l => l.lap === lap.lap);
-    const refGap = refLap ? (refLap.gap1st || 0) : 0;
-    const myGap  = lap.gap1st || 0;
-    return { x: lap.lap, y: +(myGap - refGap).toFixed(3) };
+// Use gapHistory (recorded every poll) for smooth gap evolution
+// gap = other.gap1st - ref.gap1st  (negative = other is ahead of us)
+function calcRealGap(numOther, numRef) {
+  const otherHist = gapHistory[numOther] || [];
+  const refHist   = gapHistory[numRef]   || [];
+  return otherHist.map(pt => {
+    // find closest ref entry by lap
+    const refPt = refHist.reduce((best, r) =>
+      Math.abs(r.lap - pt.lap) < Math.abs(best.lap - pt.lap) ? r : best,
+      refHist[0] || { lap: 0, gap: 0 }
+    );
+    const refGap = refPt ? (refPt.gap || 0) : 0;
+    return { x: pt.lap, y: +(( pt.gap || 0) - refGap).toFixed(3) };
   });
 }
 
@@ -629,7 +636,7 @@ function renderGapChart(active) {
     .map(num => {
       const col = colorForTeam(num);
       const td = teamData[num];
-      const pts = calcRealGap(td.laps, refLaps);
+      const pts = calcRealGap(num, refTeam);
       return {
         label: `#${num} ${td.name.split(' ').pop()}`,
         data: pts,
@@ -648,7 +655,7 @@ function renderGapChart(active) {
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
     label: `#${refTeam} (us)`,
-    data: teamData[refTeam].laps.map(l => ({ x: l.lap, y: 0 })),
+    data: (gapHistory[refTeam] || teamData[refTeam]?.laps || []).map(l => ({ x: l.lap, y: 0 })),
     borderColor: refCol,
     borderWidth: 2,
     borderDash: [4, 4],
@@ -792,6 +799,14 @@ function updateLapHistory(data) {
 
     // always update latest gap on the team record for live display
     teamData[num].latestGap1st = gap1st;
+
+    // Record gap snapshot every poll (even between laps)
+    if (!gapHistory[num]) gapHistory[num] = [];
+    const lastEntry = gapHistory[num].slice(-1)[0];
+    // store whenever lap changes or gap changes meaningfully (>0.1s)
+    if (!lastEntry || lastEntry.lap !== lapCount || Math.abs((lastEntry.gap || 0) - gap1st) > 0.1) {
+      gapHistory[num].push({ lap: lapCount, gap: gap1st });
+    }
 
     prevLapCount[num] = lapCount;
   });
@@ -1003,7 +1018,7 @@ function saveToStorage() {
   activeSessionKey = sessionKey(title);
   try {
     const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
-                    sentLaps: [...sentLaps], teamColors, savedAt: Date.now() };
+                    sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
     localStorage.setItem(activeSessionKey, JSON.stringify(state));
     // Update sessions index
     const sessions = getSessions();
@@ -1028,6 +1043,7 @@ function loadSessionData(key) {
     Object.assign(prevLapCount, state.prevLapCount || {});
     Object.assign(prevPitCount, state.prevPitCount || {});
     Object.assign(teamColors, state.teamColors || {});
+    Object.assign(gapHistory, state.gapHistory || {});
     (state.sentLaps || []).forEach(k => sentLaps.add(k));
     console.log(`Loaded session: ${state.sessionTitle} (${Object.keys(teamData).length} teams)`);
     return state.sessionTitle;
@@ -1070,8 +1086,8 @@ function clearStorageIfSessionChanged(newTitle) {
     console.log(`Session switched to: ${newTitle}`);
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
+    Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
     sentLaps.clear();
-    // Keep teamData from old session unless it conflicts
   }
 }
 

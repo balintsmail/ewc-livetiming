@@ -166,13 +166,26 @@
   </div>
 
   <div class="chart-card">
+    <h3>Lap Times by Clock Time
+      <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
+        Avg window:
+        <input type="range" id="avg-window-slider-time" min="1" max="22" value="1" step="1"
+          style="width:100px;accent-color:#3b82f6"
+          oninput="document.getElementById('avg-window-label-time').textContent=this.value+' laps'; renderLapTimesTimeChart([...activeTeams].filter(n => teamData[n]))">
+        <span id="avg-window-label-time" style="color:#aaa;min-width:44px">1 laps</span>
+      </span>
+    </h3>
+    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes-time"></canvas></div>
+  </div>
+
+  <div class="chart-card">
     <h3>Lap Times by Team
       <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
         Avg window:
-        <input type="range" id="avg-window-slider" min="1" max="22" value="10" step="1"
+        <input type="range" id="avg-window-slider" min="1" max="22" value="1" step="1"
           style="width:100px;accent-color:#3b82f6"
           oninput="document.getElementById('avg-window-label').textContent=this.value+' laps'; renderCharts()">
-        <span id="avg-window-label" style="color:#aaa;min-width:44px">10 laps</span>
+        <span id="avg-window-label" style="color:#aaa;min-width:44px">1 laps</span>
       </span>
     </h3>
     <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes"></canvas></div>
@@ -196,11 +209,6 @@
       <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+60s</span>
     </div>
     <div class="chart-wrap" style="height:680px"><canvas id="chart-gap"></canvas></div>
-  </div>
-
-  <div class="chart-card">
-    <h3>Lap Times by Clock Time</h3>
-    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes-time"></canvas></div>
   </div>
 
   <div class="chart-card">
@@ -936,7 +944,10 @@ function renderGapChart(active) {
 
 // ── Lap times by clock time chart ───────────────────────────
 function renderLapTimesTimeChart(active) {
-  const datasets = active.map(num => {
+  const avgWindow = parseInt(document.getElementById('avg-window-slider-time')?.value) || 10;
+  const datasets = [];
+
+  active.forEach(num => {
     const td = teamData[num];
     const col = colorForTeam(num);
     const pts = td.laps
@@ -946,7 +957,9 @@ function renderLapTimesTimeChart(active) {
         return { x: t, y: l.timeSec, lap: l };
       })
       .filter(Boolean);
-    return {
+
+    // Scatter: individual lap dots
+    datasets.push({
       type: 'scatter',
       label: teamLabel(num),
       data: pts,
@@ -954,19 +967,108 @@ function renderLapTimesTimeChart(active) {
       pointRadius: 3,
       pointHoverRadius: 6,
       parsing: false,
-    };
+    });
+
+    // Line: moving average, connecting the laps like the top chart
+    const avgs = movingAvg(td.laps, avgWindow);
+    const avgPts = td.laps
+      .map((l, i) => {
+        const t = l.tsMs || tsToMs(l.ts);
+        return (avgs[i] !== null && t) ? { x: t, y: avgs[i] } : null;
+      })
+      .filter(Boolean);
+    datasets.push({
+      type: 'line',
+      label: `_avg_time_${num}`,   // prefixed with _ to hide from legend
+      data: avgPts,
+      borderColor: col,
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      tension: 0.4,
+      pointRadius: 0,
+      fill: false,
+      parsing: false,
+    });
   });
 
   const yMin = 140, yMax = 176;
+
+  // Pit stop dotted lines (like the top chart), positioned by clock time
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const lapPitLabelsTime = [];
+
+  active.forEach(num => {
+    const td = teamData[num];
+    const stints = td.stints || [[]];
+    const col = colorForTeam(num);
+
+    // Historical pit stops (completed stints)
+    stints.slice(0, -1).forEach(stint => {
+      if (!stint.length) return;
+      const lastEntry = stint[stint.length - 1];
+      const t = lastEntry.tsMs || tsToMs(lastEntry.ts);
+      if (!t) return;
+      lapPitLabelsTime.push({ x: t, label: `L${lastEntry.lap}`, col });
+      datasets.push({
+        type: 'line', label: `_pit_past_time_${num}_${lastEntry.lap}`,
+        data: [{ x: t, y: yMin }, { x: t, y: yMax }],
+        borderColor: col, borderWidth: 1, borderDash: [3, 3],
+        pointRadius: 0, fill: false, parsing: false, tension: 0,
+      });
+    });
+
+    // Future pit prediction
+    const curStint = stints[stints.length - 1] || [];
+    const lastLapEntry = td.laps.length ? td.laps[td.laps.length - 1] : null;
+    const lapsLeft = Math.max(0, maxStint - curStint.length);
+    const lastT = lastLapEntry ? (lastLapEntry.tsMs || tsToMs(lastLapEntry.ts)) : null;
+    if (lapsLeft > 0 && lastT) {
+      const avgPace = stintAvgPace(curStint) || 145;
+      const predT = lastT + lapsLeft * avgPace * 1000;
+      const pitLap = lastLapEntry.lap + lapsLeft;
+      lapPitLabelsTime.push({ x: predT, label: `L${pitLap}`, col });
+      datasets.push({
+        type: 'line', label: `_pit_time_${num}`,
+        data: [{ x: predT, y: yMin }, { x: predT, y: yMax }],
+        borderColor: col, borderWidth: 1.5, borderDash: [5, 4],
+        pointRadius: 0, fill: false, parsing: false, tension: 0,
+      });
+    }
+  });
+
+  const lapPitLabelPluginTime = {
+    id: 'lapPitLabelsTime',
+    afterDraw(chart) {
+      const ctx = chart.ctx;
+      const xScale = chart.scales.x;
+      const top = chart.chartArea.top;
+      lapPitLabelsTime.forEach(pl => {
+        const xPx = xScale.getPixelForValue(pl.x);
+        if (xPx < chart.chartArea.left || xPx > chart.chartArea.right) return;
+        ctx.save();
+        ctx.fillStyle = pl.col;
+        ctx.font = 'bold 9px Segoe UI, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(pl.label, xPx, top + 10);
+        ctx.restore();
+      });
+    }
+  };
 
   if (lapTimesTimeChart) lapTimesTimeChart.destroy();
   lapTimesTimeChart = new Chart(document.getElementById('chart-laptimes-time'), {
     type: 'scatter',
     data: { datasets },
+    plugins: [lapPitLabelPluginTime],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       plugins: {
-        legend: { labels: { color: '#ccc', font: { size: 11 }, boxWidth: 14 } },
+        legend: {
+          labels: {
+            color: '#ccc', font: { size: 11 }, boxWidth: 14,
+            filter: item => !item.text.startsWith('_avg_') && !item.text.startsWith('_pit_')
+          }
+        },
         tooltip: {
           callbacks: {
             label: ctx => {
@@ -1403,9 +1505,8 @@ const OLD_SESSIONS_INDEX_KEY = 'ewc_sessions'; // legacy localStorage index, for
 let activeSessionKey = null;
 let dbPromise = null;
 
-function openDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+function openDbOnce() {
+  return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME)) {
@@ -1414,6 +1515,23 @@ function openDB() {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+  });
+}
+
+// Self-healing: a DB can end up stuck at version 1 without the object store
+// (e.g. some other code opened the same DB name before this app's upgrade
+// logic ran). onupgradeneeded then never fires again and every transaction
+// fails forever. Detect that and recreate the DB from scratch.
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = openDbOnce().then(db => {
+    if (db.objectStoreNames.contains(STORE_NAME)) return db;
+    db.close();
+    return new Promise((resolve, reject) => {
+      const delReq = indexedDB.deleteDatabase(DB_NAME);
+      delReq.onsuccess = () => openDbOnce().then(resolve, reject);
+      delReq.onerror = () => reject(delReq.error);
+    });
   });
   return dbPromise;
 }
@@ -1603,16 +1721,21 @@ async function loadFromSheets() {
 }
 
 // ── Init ──────────────────────────────────────────────────────
+// Storage (IndexedDB/localStorage/Sheets) is best-effort persistence only.
+// A failure in any of it must never block the live feed from starting.
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
 (async () => {
-  await migrateLocalStorageToIndexedDB();
-  await loadFromStorage();
-  await buildSessionPicker();
-  // If nothing in storage, try loading from Sheets before first fetch
-  if (!Object.keys(teamData).length) {
-    await loadFromSheets();
-  } else {
-    rebuildGapHistory(); // clean up gap data after restore
+  try {
+    await migrateLocalStorageToIndexedDB();
+    await loadFromStorage();
+    await buildSessionPicker();
+    if (!Object.keys(teamData).length) {
+      await loadFromSheets();
+    } else {
+      rebuildGapHistory(); // clean up gap data after restore
+    }
+  } catch(e) {
+    console.error('Storage init failed, continuing with live feed only:', e);
   }
   fetchData();
   setInterval(fetchData, INTERVAL);

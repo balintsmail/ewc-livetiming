@@ -139,7 +139,7 @@
     <button class="filter-btn active" onclick="setFilter('Overall')">Overall</button>
     <button class="filter-btn" onclick="setFilter('EWC')">EWC</button>
     <button class="filter-btn" onclick="setFilter('SST')">SST</button>
-    <button class="filter-btn" onclick="setFilter('PRD')">PRD</button>
+    <button class="filter-btn" onclick="setFilter('EXP')">EXP</button>
     <button id="copy-btn" onclick="copyForSheets()">Copy for Google Sheets</button>
     <span id="copy-feedback">Copied!</span>
   </div>
@@ -1309,39 +1309,110 @@ async function fetchData() {
   }
 }
 
-// ── LocalStorage persistence (per session, permanent) ─────────
-const SESSIONS_INDEX_KEY = 'ewc_sessions';
+// ── IndexedDB persistence (per session, permanent) ─────────────
+// Uses IndexedDB instead of localStorage: localStorage is capped at ~5MB per
+// origin (verified on this site), which a multi-hour endurance race with 70+
+// teams logging laps can realistically exceed. IndexedDB has no such ceiling.
+const DB_NAME = 'ewc_livetiming';
+const STORE_NAME = 'sessions';
+const MAX_STORED_SESSIONS = 5; // oldest sessions get pruned beyond this
+const OLD_SESSIONS_INDEX_KEY = 'ewc_sessions'; // legacy localStorage index, for one-time migration
 let activeSessionKey = null;
+let dbPromise = null;
+
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+function idbGetAll() {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+function idbPut(record) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+function idbDelete(key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
 
 function sessionKey(title) { return 'ewc_session_' + title.replace(/[^a-zA-Z0-9]/g,'_'); }
 
-function getSessions() {
-  try { return JSON.parse(localStorage.getItem(SESSIONS_INDEX_KEY) || '[]'); } catch(e) { return []; }
+async function getSessions() {
+  const all = await idbGetAll();
+  return all.map(r => ({ key: r.key, title: r.title, date: r.date, savedAt: r.savedAt || 0 }))
+             .sort((a, b) => b.savedAt - a.savedAt);
 }
 
-function saveToStorage() {
+// One-time move of any pre-existing localStorage sessions into IndexedDB so
+// old history (e.g. a previous race archive) isn't lost when switching backends.
+async function migrateLocalStorageToIndexedDB() {
+  let oldSessions;
+  try { oldSessions = JSON.parse(localStorage.getItem(OLD_SESSIONS_INDEX_KEY) || '[]'); }
+  catch(e) { return; }
+  if (!oldSessions.length) return;
+  for (const s of oldSessions) {
+    try {
+      const raw = localStorage.getItem(s.key);
+      if (!raw) continue;
+      const state = JSON.parse(raw);
+      await idbPut({ key: s.key, title: s.title, date: s.date, savedAt: state.savedAt || Date.now(), state });
+      localStorage.removeItem(s.key);
+    } catch(e) { console.warn('Migration failed for session', s.title, e); }
+  }
+  localStorage.removeItem(OLD_SESSIONS_INDEX_KEY);
+  console.log(`Migrated ${oldSessions.length} session(s) from localStorage to IndexedDB`);
+}
+
+async function saveToStorage() {
   if (!rawData?.Titre) return;
   const title = rawData.Titre;
   activeSessionKey = sessionKey(title);
+  const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
+                  sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
   try {
-    const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
-                    sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
-    localStorage.setItem(activeSessionKey, JSON.stringify(state));
-    // Update sessions index
-    const sessions = getSessions();
-    if (!sessions.find(s => s.key === activeSessionKey)) {
-      sessions.unshift({ key: activeSessionKey, title, date: new Date().toLocaleDateString() });
-      localStorage.setItem(SESSIONS_INDEX_KEY, JSON.stringify(sessions));
-      buildSessionPicker();
-    }
-  } catch(e) { console.warn('Storage save failed:', e); }
+    await idbPut({ key: activeSessionKey, title, date: new Date().toLocaleDateString(), savedAt: state.savedAt, state });
+  } catch(e) { console.warn('Storage save failed:', e); return; }
+  const sessions = await getSessions();
+  if (!sessions.some(s => s.key === activeSessionKey)) buildSessionPicker();
+  const excess = sessions.filter(s => s.key !== activeSessionKey).slice(MAX_STORED_SESSIONS - 1);
+  for (const s of excess) {
+    await idbDelete(s.key);
+    console.log('Pruned old session to save space:', s.title);
+  }
 }
 
-function loadSessionData(key) {
+async function loadSessionData(key) {
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return false;
-    const state = JSON.parse(raw);
+    const all = await idbGetAll();
+    const record = all.find(r => r.key === key);
+    if (!record) return false;
+    const state = record.state;
     Object.keys(teamData).forEach(k => delete teamData[k]);
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
@@ -1357,17 +1428,16 @@ function loadSessionData(key) {
   } catch(e) { console.warn('Storage load failed:', e); return false; }
 }
 
-function loadFromStorage() {
-  // Try to find the most recent session and load it
-  const sessions = getSessions();
+async function loadFromStorage() {
+  const sessions = await getSessions();
   if (!sessions.length) return null;
   const latest = sessions[0];
   activeSessionKey = latest.key;
   return loadSessionData(latest.key);
 }
 
-function switchToSession(key) {
-  loadSessionData(key);
+async function switchToSession(key) {
+  await loadSessionData(key);
   activeSessionKey = key;
   rebuildGapHistory();
   buildTeamFilterBar();
@@ -1376,8 +1446,8 @@ function switchToSession(key) {
   renderStandings(rawData || { Donnees: [] });
 }
 
-function buildSessionPicker() {
-  const sessions = getSessions();
+async function buildSessionPicker() {
+  const sessions = await getSessions();
   const picker = document.getElementById('session-picker');
   if (!picker) return;
   picker.innerHTML = sessions.map(s =>
@@ -1448,17 +1518,19 @@ async function loadFromSheets() {
 
 // ── Init ──────────────────────────────────────────────────────
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
-loadFromStorage();
-buildSessionPicker();
-
-// If nothing in storage, try loading from Sheets before first fetch
-if (!Object.keys(teamData).length) {
-  loadFromSheets().then(() => fetchData());
-} else {
-  rebuildGapHistory(); // clean up gap data after restore
+(async () => {
+  await migrateLocalStorageToIndexedDB();
+  await loadFromStorage();
+  await buildSessionPicker();
+  // If nothing in storage, try loading from Sheets before first fetch
+  if (!Object.keys(teamData).length) {
+    await loadFromSheets();
+  } else {
+    rebuildGapHistory(); // clean up gap data after restore
+  }
   fetchData();
-}
-setInterval(fetchData, INTERVAL);
+  setInterval(fetchData, INTERVAL);
+})();
 </script>
 </body>
 </html>

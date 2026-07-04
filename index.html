@@ -220,7 +220,7 @@
     <label>Teams:</label>
     <div id="stint-team-filter-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
     <span style="margin-left:16px;color:#aaa;font-size:12px">Max stint:</span>
-    <input type="number" id="max-stint-input" value="21" min="1" max="200" onchange="renderStints()">
+    <input type="number" id="max-stint-input" value="27" min="1" max="200" onchange="renderStints()">
     <span style="color:#aaa;font-size:12px">laps</span>
     <span id="longest-stint-label" style="font-size:11px;color:#555;margin-left:8px"></span>
   </div>
@@ -245,6 +245,21 @@
         </tr>
       </thead>
       <tbody id="stint-table-body"></tbody>
+    </table>
+  </div>
+
+  <div class="chart-card">
+    <h3>SST Stint Analysis <span style="font-size:11px;color:#555;font-weight:400">— click a stint's lap count to exclude/include it from the prediction</span></h3>
+    <table id="sst-stint-table">
+      <thead>
+        <tr>
+          <th>Team</th>
+          <th>Stints (laps)</th>
+          <th style="text-align:center">Predicted stint (laps)</th>
+          <th style="text-align:left">Predicted stint</th>
+        </tr>
+      </thead>
+      <tbody id="sst-stint-table-body"></tbody>
     </table>
   </div>
 </div>
@@ -291,7 +306,7 @@ const sentLaps = new Set();
 
 // Persistent colors per team number
 const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
-const FIXED_COLORS = { '38':'#ef4444', '25':'#facc15', '77':'#3b82f6', '41':'#f97316', '19':'#60a5fa', '43':'#f472b6', '52':'#34d399', '64':'#a78bfa', '93':'#f87171' };
+const FIXED_COLORS = { '38':'#ffffff', '25':'#facc15', '77':'#3b82f6', '41':'#f97316', '19':'#60a5fa', '43':'#f472b6', '52':'#34d399', '64':'#a78bfa', '93':'#f87171' };
 const teamColors = {};
 
 // { num: { name, rider, cat, laps: [{lap, timeSec, timeStr, initials, ts}] } }
@@ -1225,6 +1240,74 @@ function renderStints() {
       <td style="text-align:right;font-family:monospace;color:#94a3b8">${avg ? secToStr(avg) : '—'}</td>
       <td style="text-align:right;font-family:monospace;color:#f97316">${pitInStr}</td>
       <td style="text-align:right;font-weight:700;color:#fbbf24">${pitAtStr}</td>
+    </tr>`;
+  }).join('');
+
+  renderSstStintTable();
+}
+
+// ── SST stint analysis: per-stint lap counts, click to include/exclude ──
+const stintOverrides = {}; // { [num]: { [stintIndex]: true|false } } — explicit user overrides
+
+function stintCountThreshold() {
+  return parseInt(document.getElementById('max-stint-input')?.value) || 21;
+}
+
+// A stint counts toward the prediction unless explicitly overridden, defaulting
+// to excluded when it's shorter than the max-stint threshold (likely an early/
+// unscheduled pit, not a representative full stint).
+function isStintCounted(num, idx, len) {
+  const override = stintOverrides[num]?.[idx];
+  if (override !== undefined) return override;
+  return len >= stintCountThreshold();
+}
+
+function toggleStintCount(num, idx) {
+  const stints = (teamData[num]?.stints || []).slice(0, -1);
+  const len = stints[idx]?.length || 0;
+  if (!stintOverrides[num]) stintOverrides[num] = {};
+  stintOverrides[num][idx] = !isStintCounted(num, idx, len);
+  renderSstStintTable();
+}
+
+function renderSstStintTable() {
+  const tbody = document.getElementById('sst-stint-table-body');
+  if (!tbody) return;
+  const sstNums = Object.keys(teamData)
+    .filter(n => (teamData[n].cat || '').toUpperCase() === 'SST')
+    .sort((a, b) => parseInt(a) - parseInt(b));
+
+  tbody.innerHTML = sstNums.map(num => {
+    const td = teamData[num];
+    const stints = (td.stints || [[]]).slice(0, -1); // completed stints only
+    const col = colorForTeam(num);
+
+    const cells = stints.map((s, idx) => {
+      const len = s.length;
+      const counted = isStintCounted(num, idx, len);
+      const style = counted ? 'color:#ccc' : 'color:#555;text-decoration:line-through';
+      return `<span onclick="toggleStintCount('${num}',${idx})" style="cursor:pointer;padding:2px 7px;display:inline-block;${style}" title="Click to ${counted ? 'exclude' : 'include'}">${len}</span>`;
+    }).join(' ');
+
+    const countedLens = stints
+      .map((s, idx) => ({ len: s.length, idx }))
+      .filter(({ len, idx }) => isStintCounted(num, idx, len))
+      .map(({ len }) => len);
+    const prediction = countedLens.length
+      ? Math.round(countedLens.reduce((a, b) => a + b, 0) / countedLens.length)
+      : null;
+
+    const barMax = stintCountThreshold();
+    const barPct = prediction !== null ? Math.min(100, (prediction / barMax) * 100) : 0;
+    const bar = `<div style="background:#1a1a1a;border-radius:3px;height:14px;width:140px;overflow:hidden">
+        <div style="background:${col};height:100%;width:${barPct}%;border-radius:3px"></div>
+      </div>`;
+
+    return `<tr>
+      <td style="color:${col};font-weight:700">#${num} <span style="color:#666;font-weight:400;font-size:11px">${(td.name || '').slice(0,18)}</span></td>
+      <td style="font-size:12px">${cells || '—'}</td>
+      <td style="text-align:center;font-weight:700;font-size:15px">${prediction !== null ? prediction + ' laps' : '—'}</td>
+      <td>${bar}</td>
     </tr>`;
   }).join('');
 }

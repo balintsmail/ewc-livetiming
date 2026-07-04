@@ -284,14 +284,14 @@ function buildColumnMap(colonnes) {
   };
 }
 
-const DEFAULT_TEAMS = ['38','27','9','25','49','18','77','41'];
+const DEFAULT_TEAMS = ['38','25','77','41','19','43','52','64','93'];
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz5cYKuhRC4vLKTo9lMMTTzvlERIgrP4tQaM0DoraGCdS28WMvMuSEdGeSfkeNGGs79/exec';
 // track which laps already sent: "num-lap" keys
 const sentLaps = new Set();
 
 // Persistent colors per team number
 const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
-const FIXED_COLORS = { '38':'#ef4444', '27':'#7dd3fc', '9':'#22c55e', '25':'#facc15', '49':'#a855f7', '18':'#991b1b', '77':'#3b82f6', '41':'#f97316' };
+const FIXED_COLORS = { '38':'#ef4444', '25':'#facc15', '77':'#3b82f6', '41':'#f97316', '19':'#60a5fa', '43':'#f472b6', '52':'#34d399', '64':'#a78bfa', '93':'#f87171' };
 const teamColors = {};
 
 // { num: { name, rider, cat, laps: [{lap, timeSec, timeStr, initials, ts}] } }
@@ -1456,12 +1456,15 @@ async function buildSessionPicker() {
 }
 
 function clearStorageIfSessionChanged(newTitle) {
-  // Don't clear — just save under a new session key. Sessions are preserved.
-  // When title changes, a new session key is used automatically in saveToStorage.
-  // But we DO need to reset in-memory tracking if session changes mid-run
+  // Sessions are still preserved in storage under their own key (saveToStorage).
+  // But in-memory data must be wiped on a genuine session change, otherwise stale
+  // lap history from a previous session/event (e.g. a different car number's laps
+  // that never gets overwritten because that car isn't in the new session) keeps
+  // rendering in the charts forever.
   const newKey = sessionKey(newTitle);
   if (activeSessionKey && newKey !== activeSessionKey) {
     console.log(`Session switched to: ${newTitle}`);
+    Object.keys(teamData).forEach(k => delete teamData[k]);
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
     Object.keys(gapHistory).forEach(k => delete gapHistory[k]);

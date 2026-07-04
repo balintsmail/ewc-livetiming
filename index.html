@@ -734,6 +734,13 @@ function tsToMs(tsStr) {
   return d.getTime();
 }
 
+// Event clock is Japan local time (Suzuka), regardless of the viewer's own
+// browser timezone -- always format displayed clock times against it.
+const EVENT_TZ = 'Asia/Tokyo';
+function jstTime(ms, opts) {
+  return new Date(ms).toLocaleTimeString([], { timeZone: EVENT_TZ, hour: '2-digit', minute: '2-digit', ...opts });
+}
+
 // ── Rebuild gap history from lap times ───────────────────────
 function rebuildGapHistory() {
   Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
@@ -915,7 +922,7 @@ function renderGapChart(active) {
               const s = ctx.parsed.y;
               const sign = s > 0 ? '+' : '';
               const timeStr = ctx.raw?.t > 1e12
-                ? ' @ ' + new Date(ctx.raw.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+                ? ' @ ' + jstTime(ctx.raw.t)
                 : '';
               return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${timeStr}`;
             }
@@ -1075,7 +1082,7 @@ function renderLapTimesTimeChart(active) {
               const l = ctx.raw?.lap;
               if (!l) return '';
               const t = ctx.raw.x > 1e12
-                ? new Date(ctx.raw.x).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+                ? jstTime(ctx.raw.x, {second:'2-digit'})
                 : '';
               return ` ${ctx.dataset.label}  L${l.lap}: ${l.timeStr} ${t ? '@ '+t : ''}`;
             }
@@ -1088,7 +1095,7 @@ function renderLapTimesTimeChart(active) {
           ticks: {
             color: '#888',
             maxTicksLimit: 16,
-            callback: v => v > 1e12 ? new Date(v).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : v
+            callback: v => v > 1e12 ? jstTime(v) : v
           },
           grid: { color: '#222' },
           title: { display: true, text: 'Clock Time', color: '#666' }
@@ -1326,7 +1333,7 @@ function renderStints() {
     const avg = stintAvgPace(cur);
     const pitInSec = avg !== null ? lapsLeft * avg : null;
     const pitAtMs  = pitInSec !== null ? nowMs + pitInSec * 1000 : null;
-    const pitAtStr = pitAtMs  !== null ? new Date(pitAtMs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
+    const pitAtStr = pitAtMs  !== null ? jstTime(pitAtMs) : '—';
     const pitInStr = pitInSec !== null ? secToStr(pitInSec) : '—';
     const pct = curLen / maxStint;
     const remClass = pct >= 0.85 ? 'pit-soon' : pct >= 0.6 ? 'pit-mid' : 'pit-ok';
@@ -1465,7 +1472,7 @@ async function fetchData() {
     clearStorageIfSessionChanged(data.Titre);
 
     document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
-    document.getElementById('clock').textContent = new Date(data.HeureJourUTC).toLocaleTimeString();
+    document.getElementById('clock').textContent = jstTime(new Date(data.HeureJourUTC).getTime(), {second:'2-digit'}) + ' JST';
     document.getElementById('remaining').textContent = msToTime(data.TempsRestant);
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
     document.getElementById('status-dot').classList.add('live');

@@ -175,7 +175,7 @@
         <span id="avg-window-label-time" style="color:#aaa;min-width:44px">1 laps</span>
       </span>
     </h3>
-    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes-time"></canvas></div>
+    <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes-time"></canvas></div>
   </div>
 
   <div class="chart-card">
@@ -188,7 +188,7 @@
         <span id="avg-window-label" style="color:#aaa;min-width:44px">1 laps</span>
       </span>
     </h3>
-    <div class="chart-wrap" style="height:510px"><canvas id="chart-laptimes"></canvas></div>
+    <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes"></canvas></div>
   </div>
 
   <div class="chart-card">
@@ -741,6 +741,24 @@ function jstTime(ms, opts) {
   return new Date(ms).toLocaleTimeString([], { timeZone: EVENT_TZ, hour: '2-digit', minute: '2-digit', ...opts });
 }
 
+// Recompute every lap's clock timestamp from lap durations, anchored to the
+// feed's own current time. Fixes any laps recorded while a viewer's local
+// clock was wrong -- doesn't rely on the old (possibly bad) tsMs at all.
+function recalibrateLapTimestamps() {
+  if (!rawData?.HeureJourUTC) return;
+  const nowMs = new Date(rawData.HeureJourUTC).getTime();
+  Object.values(teamData).forEach(td => {
+    let t = nowMs;
+    for (let i = td.laps.length - 1; i >= 0; i--) {
+      td.laps[i].tsMs = t;
+      t -= (td.laps[i].timeSec || 0) * 1000;
+    }
+  });
+  saveToStorage();
+  rebuildGapHistory();
+  renderCharts();
+}
+
 // ── Rebuild gap history from lap times ───────────────────────
 function rebuildGapHistory() {
   Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
@@ -1150,6 +1168,10 @@ function renderLapTable(active) {
 
 // ── Lap history tracking ─────────────────────────────────────
 function updateLapHistory(data) {
+  // Use the feed's own clock, not the viewer's local Date.now() -- a viewer's
+  // system clock can be wrong/misconfigured, which would otherwise corrupt
+  // lap timestamps for everyone looking at the same shared data.
+  const feedNowMs = data.HeureJourUTC ? new Date(data.HeureJourUTC).getTime() : Date.now();
   data.Donnees.forEach(r => {
     const num = cleanVal(r[C.num]);
     const rider = cleanVal(r[C.rider]);
@@ -1225,14 +1247,14 @@ function updateLapHistory(data) {
       const bestStr = cleanVal(r[C.bestLap]);
       const timeSec = parseTime(bestStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: Date.now(), gap1st });
+        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
       }
     } else if (lapCount > prev && lapCount > 0) {
       const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
         ? lastLapStr : cleanVal(r[C.bestLap]);
       const timeSec = parseTime(timeStr);
       if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: Date.now(), gap1st });
+        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
       }
     }
 

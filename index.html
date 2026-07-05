@@ -165,6 +165,12 @@
     <!-- populated by JS -->
   </div>
 
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <label style="font-size:11px;color:#aaa;margin-right:2px">Lines:</label>
+    <button id="line-style-smooth" class="filter-btn active" onclick="setLineStyle('smooth')">Smooth</button>
+    <button id="line-style-straight" class="filter-btn" onclick="setLineStyle('straight')">Straight</button>
+  </div>
+
   <div class="chart-card">
     <h3>Lap Times by Clock Time
       <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
@@ -323,6 +329,16 @@ const teamData = {};
 const prevLapCount = {};
 // which teams are toggled on
 let activeTeams = new Set(DEFAULT_TEAMS);
+
+// Line style for both lap-time charts: smooth (curved) or straight segments
+let lineTension = 0.4;
+function setLineStyle(style) {
+  lineTension = style === 'smooth' ? 0.4 : 0;
+  document.getElementById('line-style-smooth').classList.toggle('active', style === 'smooth');
+  document.getElementById('line-style-straight').classList.toggle('active', style === 'straight');
+  renderCharts();
+  renderLapTimesTimeChart([...activeTeams].filter(n => teamData[n]));
+}
 
 let rawData = null;
 let currentFilter = 'Overall';
@@ -548,7 +564,7 @@ function renderCharts() {
       borderColor: col,
       backgroundColor: 'transparent',
       borderWidth: 2.5,
-      tension: 0.4,
+      tension: lineTension,
       pointRadius: 0,
       fill: false,
       parsing: false,
@@ -1009,7 +1025,7 @@ function renderLapTimesTimeChart(active) {
       borderColor: col,
       backgroundColor: 'transparent',
       borderWidth: 2.5,
-      tension: 0.4,
+      tension: lineTension,
       pointRadius: 0,
       fill: false,
       parsing: false,

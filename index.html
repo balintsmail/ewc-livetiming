@@ -108,6 +108,75 @@
   .pit-soon { color: #ef4444 !important; font-weight: 700; }
   .pit-mid  { color: #f59e0b !important; }
   .pit-ok   { color: #22c55e !important; }
+
+  /* ── Live Standing tab ── */
+  .ls-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .ls-title { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+  .ls-legend { font-size: 11px; color: #888; }
+  .ls-us-key { color: #fbbf24; font-weight: 600; }
+  .ls-hint { font-size: 11px; color: #777; margin-bottom: 12px; line-height: 1.5; }
+  .ls-hint b { color: #9aa7b4; }
+
+  #ls-table-wrap { overflow-x: auto; margin-bottom: 20px; }
+  #ls-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  #ls-table th, #ls-table td { border: 1px solid #222; padding: 3px 6px; text-align: center; }
+  #ls-table thead th { background: #1a2533; color: #90b4d6; font-weight: 600; position: sticky; top: 0; z-index: 2; }
+  #ls-table thead tr:nth-child(2) th { top: 27px; z-index: 2; }
+  #ls-table th.ls-grp { font-size: 12px; }
+  #ls-table th.ls-grp small { display: block; font-weight: 400; font-size: 9px; color: #64748b; }
+  #ls-table .ls-sub { font-size: 10px; color: #7d93a8; font-weight: 600; }
+  #ls-table td.ls-team, #ls-table th.ls-team {
+    text-align: left; position: sticky; left: 0; z-index: 3;
+    max-width: 210px; overflow: hidden; text-overflow: ellipsis;
+  }
+  #ls-table th.ls-team { z-index: 4; background: #1a2533; }
+  #ls-table td.ls-team { background: #0d0d0d; font-weight: 600; }
+  #ls-table td.ls-team small { color: #666; font-weight: 400; font-size: 10px; margin-left: 4px; }
+  #ls-table tr.ls-us td { background: #241f0c; }
+  #ls-table tr.ls-us td.ls-team { background: #241f0c; color: #fbbf24; }
+  #ls-table td.ls-rank { color: #8a95a1; font-weight: 700; width: 30px; }
+  #ls-table tr.ls-us td.ls-rank { color: #fbbf24; }
+  #ls-table input.ls-in {
+    width: 34px; background: #111; border: 1px solid #2a2a2a; color: #ddd;
+    text-align: center; font-size: 11px; border-radius: 3px; padding: 2px 0; font-family: monospace;
+  }
+  #ls-table input.ls-in:focus { outline: none; border-color: #2563eb; background: #0d1a2f; }
+  #ls-table input.ls-in:disabled { background: #0d0d0d; border-color: #171717; color: #333; cursor: not-allowed; }
+  #ls-table td.ls-na { color: #333; background: #0b0b0b; }
+  #ls-table td.ls-sigma { font-family: monospace; font-weight: 700; color: #cbd5e1; background: #12161c; }
+  #ls-table td.ls-sigma .ls-off { display: block; font-size: 9px; font-weight: 400; color: #556270; }
+  #ls-table td.ls-sigma.ls-match  { color: #4ade80; }
+  #ls-table td.ls-sigma.ls-mismatch { color: #f87171; }
+  #ls-table td.ls-static { font-family: monospace; font-weight: 700; color: #cbd5e1; background: #12161c; }
+  #ls-table td.ls-champ { font-family: monospace; font-weight: 700; font-size: 14px; color: #fbbf24; background: #15130a; }
+  .ls-grp-a { background: #16233a !important; }
+  .ls-grp-b { background: #172030 !important; }
+
+  /* Scenario: drag-to-order finishing list + recalculated chart */
+  .ls-scenario-row { display: flex; gap: 14px; align-items: stretch; }
+  .ls-finish-list {
+    width: 300px; flex: 0 0 300px; max-height: 600px; overflow-y: auto;
+    border: 1px solid #222; border-radius: 6px; background: #0b0b0b; padding: 4px;
+  }
+  .ls-fin-row {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px; margin: 2px 0;
+    background: #141414; border: 1px solid #222; border-radius: 4px; cursor: grab;
+    font-size: 11px; user-select: none;
+  }
+  .ls-fin-row:active { cursor: grabbing; }
+  .ls-fin-dragging { opacity: .4; }
+  .ls-fin-over { border-color: #2563eb; box-shadow: inset 0 -2px 0 #2563eb; }
+  .ls-fin-us { background: #241f0c; border-color: #fbbf24; }
+  .ls-fin-us .ls-fin-name { color: #fbbf24; font-weight: 700; }
+  .ls-fin-pos { width: 30px; color: #8a95a1; font-weight: 700; font-family: monospace; }
+  .ls-fin-pts { width: 22px; text-align: right; color: #4ade80; font-family: monospace; font-weight: 700; }
+  .ls-fin-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+  .ls-fin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; }
+
+  .ls-inrace-ctl { float: right; font-size: 11px; font-weight: 400; color: #9aa7b4; display: flex; align-items: center; gap: 6px; }
+  .ls-inrace-ctl label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .ls-inrace-ctl input[type=number] { width: 52px; background: #111; border: 1px solid #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+  #ls-inrace-note { color: #666; }
 </style>
 </head>
 <body>
@@ -128,9 +197,10 @@
 </header>
 
 <div class="tabs">
-  <div class="tab" onclick="switchTab('standings')">Standings</div>
-  <div class="tab active" onclick="switchTab('charts')">Charts</div>
-  <div class="tab" onclick="switchTab('stints')">Stints</div>
+  <div class="tab" data-tab="standings" onclick="switchTab('standings')">Live Laps</div>
+  <div class="tab active" data-tab="charts" onclick="switchTab('charts')">Charts</div>
+  <div class="tab" data-tab="stints" onclick="switchTab('stints')">Stints</div>
+  <div class="tab" data-tab="livestanding" onclick="switchTab('livestanding')">Live Standing</div>
 </div>
 
 <!-- STANDINGS TAB -->
@@ -278,8 +348,61 @@
   </div>
 </div>
 
+<!-- LIVE STANDING TAB -->
+<div id="tab-livestanding" class="panel">
+  <div class="ls-toolbar">
+    <div class="ls-title">World Cup (SST) — Championship Points</div>
+    <div class="ls-legend">Best 3 of 4 rounds count &nbsp;·&nbsp; <span class="ls-us-key">Champion-Hert = us</span></div>
+    <span style="margin-left:auto"></span>
+    <button class="filter-btn" onclick="renderLiveStanding()">Re-rank</button>
+    <button class="filter-btn" onclick="resetLiveStanding()">Reset breakdown</button>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:18px">
+    <h3>Worst race dropped — banked (solid) + Bol d'Or upside (faded)
+      <span class="ls-inrace-ctl">
+        <label><input type="checkbox" id="ls-inrace-toggle" onchange="lsSetInRace(this.checked)"> In-race projection</label>
+        <span id="ls-inrace-fields" hidden>
+          · elapsed <input type="number" id="ls-inrace-hours" min="0" max="24" step="0.5" value="0"
+            oninput="lsSetElapsed(this.value)"> h
+          <span id="ls-inrace-note"></span>
+        </span>
+      </span>
+    </h3>
+    <div class="chart-wrap" id="ls-chart-top-wrap" style="height:640px"><canvas id="ls-chart-top"></canvas></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:18px">
+    <h3>Scenario — drag teams into predicted Bol d'Or finishing order; championship recalculates →
+      <span id="ls-scenario-status" style="float:right;font-size:12px;font-weight:600"></span>
+    </h3>
+    <div class="ls-scenario-row">
+      <div id="ls-finish-list" class="ls-finish-list"></div>
+      <div class="chart-wrap" id="ls-chart-scenario-wrap" style="flex:1;height:480px"><canvas id="ls-chart-scenario"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:18px">
+    <h3>Current total — acquired best 3 of 4 (solid) + max still available at Bol d'Or (faded)</h3>
+    <div class="chart-wrap" id="ls-chart-wrap" style="height:640px"><canvas id="ls-chart"></canvas></div>
+  </div>
+
+  <div class="ls-hint">
+    Enter where each team scored per round — <b>Qual</b> / <b>8h</b> / <b>16h</b> / <b>Finish</b>. The 8h &amp; 16h
+    partials exist only for the 24H rounds (Le Mans, Bol d'Or); 8H rounds (Spa, Suzuka) are greyed out.
+    Round <b>Σ</b> auto-sums and turns green when it matches the grey official total. <b>Champ</b> = best 3 round
+    totals. <b>Bol d'Or</b> (R4) is the upcoming final round — fill it for scenarios, or leave it blank.
+  </div>
+  <div id="ls-table-wrap">
+    <table id="ls-table"><thead id="ls-head"></thead><tbody id="ls-body"></tbody></table>
+  </div>
+</div>
+
 <script>
-const API = 'https://corsproxy.io/?url=https://fimewc.live-frclassification.fr/r1.json';
+// The feed now serves `Access-Control-Allow-Origin: *` itself, so we fetch it
+// directly — no CORS proxy needed. (corsproxy.io moved to a paid API key in
+// 2025 and started returning 401; going direct removes that dependency.)
+const API = 'https://fimewc.live-frclassification.fr/r1.json';
 const INTERVAL = 5000;
 
 // Column indices — rebuilt dynamically from Colonnes in each JSON response
@@ -397,12 +520,13 @@ function colorForTeam(num) {
 
 // ── Tab switching ────────────────────────────────────────────
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i) =>
-    t.classList.toggle('active', ['standings','charts','stints'][i] === name));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p =>
     p.classList.toggle('active', p.id === 'tab-' + name));
   if (name === 'charts') renderCharts();
   if (name === 'stints') { buildStintFilterBar(); renderStints(); }
+  if (name === 'livestanding') renderLiveStanding();
 }
 
 // ── Standings filter ─────────────────────────────────────────
@@ -1499,6 +1623,698 @@ function copyForSheets() {
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+//  LIVE STANDING — World Cup (SST) championship points calculator
+// ══════════════════════════════════════════════════════════════
+// The 4 rounds of the 2026 season. Per reg 1.34.7 the 8h/16h partial
+// classifications exist ONLY for 12–24H races, so the two 8H rounds
+// (Spa, Suzuka) award qualifying + finish only.
+const LS_ROUNDS = [
+  { key: 'R1', name: 'Le Mans',  loc: 'FRA', dur: '24H', parts: ['q', 'h8', 'h16', 'fin'] },
+  { key: 'R2', name: 'Spa',      loc: 'BEL', dur: '8H',  parts: ['q', 'fin'] },
+  { key: 'R3', name: 'Suzuka',   loc: 'JPN', dur: '8H',  parts: ['q', 'fin'] },
+  { key: 'R4', name: "Bol d'Or", loc: 'FRA', dur: '24H', parts: ['q', 'h8', 'h16', 'fin'] },
+];
+const LS_PART_LABEL = { q: 'Qual', h8: '8h', h16: '16h', fin: 'Finish' };
+// Max points obtainable at each milestone of a 24H round (win pole + lead
+// both partials + win the race): quali 5, 8h 10, 16h 10, finish 40 → 65.
+const LS_PART_MAX  = { q: 5, h8: 10, h16: 10, fin: 40 };
+const LS_R4_MAX = LS_ROUNDS[3].parts.reduce((s, p) => s + LS_PART_MAX[p], 0); // 65
+const LS_US = 'Champion-Hert Powered by MRP';
+const LS_STORE_KEY = 'ls_points_breakdown_v1';
+
+// Official round totals after Suzuka (R1–R3 settled; R4 upcoming/blank).
+// Source: "2026_104-SST Teams endurance ranking AFTER Suzuka". A round total
+// already bundles that round's quali + partial + finish points.
+const LS_SEED = [
+  { team: 'Champion-Hert Powered by MRP', manuf: 'BMW', R1: 62, R2: 3,  R3: 19 },
+  { team: 'Wójcik Racing Team #77 SST', manuf: 'Honda', R1: 20, R2: 24, R3: 21 },
+  { team: 'Dafy-Kaedear-RAC41-Honda', manuf: 'Honda', R1: 39, R2: 10, R3: 15 },
+  { team: 'Team Étoile', manuf: 'BMW', R1: 13, R2: 20, R3: 29 },
+  { team: 'Revo-M2', manuf: 'Aprilia', R1: 25, R2: 34, R3: 0 },
+  { team: 'TRT27 AZ moto', manuf: 'Honda', R1: 39, R2: 18, R3: 0 },
+  { team: 'Honda No Limits', manuf: 'Honda', R1: 47, R2: 0,  R3: 0 },
+  { team: 'TEAM TECMAS - MINERVA OIL', manuf: 'BMW', R1: 28, R2: 19, R3: 0 },
+  { team: 'TEAM 18 POMPIERS IGOL CMS MOTOSTORE', manuf: 'Yamaha', R1: 19, R2: 21, R3: 0 },
+  { team: 'NCXX RACING', manuf: 'Honda', R1: 0, R2: 0, R3: 34 },
+  { team: 'Junior Team le Mans Sud Suzuki', manuf: 'Suzuki', R1: 21, R2: 11, R3: 0 },
+  { team: 'TEAM RACING 85 by A2M2', manuf: 'Kawasaki', R1: 17, R2: 12, R3: 0 },
+  { team: '3ART Best Of Bike Hamaguchi', manuf: 'Yamaha', R1: 0, R2: 14, R3: 7 },
+  { team: 'Kawasaki Plaza Racing Team', manuf: 'Kawasaki', R1: 0, R2: 0, R3: 19 },
+  { team: 'Slider Endurance', manuf: 'Honda', R1: 3, R2: 15, R3: 0 },
+  { team: 'Team38', manuf: 'Kawasaki', R1: 0, R2: 0, R3: 15 },
+  { team: 'Team TATARA aprilia', manuf: 'Aprilia', R1: 0, R2: 0, R3: 14 },
+  { team: 'NATIONAL MOTOS HONDA FMA', manuf: 'Honda', R1: 14, R2: 0, R3: 0 },
+  { team: 'Moto Win Racing', manuf: 'Honda', R1: 0, R2: 0, R3: 13 },
+  { team: 'SANRIO CHARACTERS × Honda Kumamoto Racing', manuf: 'Honda', R1: 0, R2: 0, R3: 12 },
+  { team: 'Aprilia Le Mans 2 Roues', manuf: 'Aprilia', R1: 12, R2: 0, R3: 0 },
+  { team: 'TEAM 202', manuf: 'Yamaha', R1: 4, R2: 7, R3: 0 },
+  { team: 'HIMEJI NICHIRIN RACING', manuf: 'Yamaha', R1: 0, R2: 0, R3: 10 },
+  { team: 'Cam Racing Team', manuf: 'Honda', R1: 10, R2: 0, R3: 0 },
+  { team: 'JMA RACING ACTION BIKE 34', manuf: 'Suzuki', R1: 2, R2: 8, R3: 0 },
+  { team: 'TEAM KOHSAKA & Takahon Racing', manuf: 'Honda', R1: 0, R2: 0, R3: 9 },
+  { team: 'INFINITEAM FLAM RACING', manuf: 'Yamaha', R1: 0, R2: 9, R3: 0 },
+  { team: 'Breiz motorsport', manuf: 'Yamaha', R1: 9, R2: 0, R3: 0 },
+  { team: 'MOTORCYCLES#27 EJ YIC', manuf: 'Honda', R1: 0, R2: 0, R3: 8 },
+  { team: 'TONE Team4413 BMW', manuf: 'BMW', R1: 0, R2: 0, R3: 6 },
+  { team: 'TEAM SLA / HONDA TOULON', manuf: 'Honda', R1: 0, R2: 6, R3: 0 },
+  { team: 'WERC MOTORS EVENTS', manuf: 'Suzuki', R1: 6, R2: 0, R3: 0 },
+  { team: 'T3RT', manuf: 'Yamaha', R1: 0, R2: 5, R3: 0 },
+  { team: 'T2C Racing', manuf: 'BMW', R1: 0, R2: 0, R3: 5 },
+];
+
+// Manufacturer accent colours for the chart bars.
+const LS_MANUF_COLOR = {
+  BMW: '#3b82f6', Honda: '#ef4444', Aprilia: '#a855f7', Yamaha: '#0ea5e9',
+  Kawasaki: '#22c55e', Suzuki: '#f59e0b',
+};
+
+// Per-team colours carried over from the Spa 2025 HERT analysis, so the same
+// teams keep the same colour here. Others fall back to their manufacturer hue.
+const LS_TEAM_COLOR = {
+  'Champion-Hert Powered by MRP': '#ffffff', // HERT (us) — white, as at Spa
+  'Wójcik Racing Team #77 SST':   '#42a5f5', // blue
+  'Team Étoile':                  '#fdd835', // yellow
+  'Revo-M2':                      '#ab47bc', // purple
+};
+function lsColor(row) { return LS_TEAM_COLOR[row.team] || LS_MANUF_COLOR[row.manuf] || '#64748b'; }
+
+// User-entered per-part breakdown: lsData[team][roundKey][part] = number|''.
+let lsData = {};
+const lsCharts = { top: null, full: null, scenario: null };
+
+function lsId(team) { return team.replace(/[^a-zA-Z0-9]/g, '_'); }
+function lsOfficial(row, rkey) { return rkey === 'R4' ? null : (row[rkey] ?? 0); }
+
+function lsLoad() {
+  try {
+    const raw = localStorage.getItem(LS_STORE_KEY);
+    lsData = raw ? JSON.parse(raw) : {};
+  } catch (e) { lsData = {}; }
+}
+function lsSave() {
+  try { localStorage.setItem(LS_STORE_KEY, JSON.stringify(lsData)); } catch (e) {}
+}
+
+// Has the user entered any part for this team+round?
+function lsRoundEntered(team, rkey) {
+  const r = lsData[team] && lsData[team][rkey];
+  return !!r && LS_ROUNDS.find(x => x.key === rkey).parts
+    .some(p => r[p] !== '' && r[p] != null);
+}
+// Points for a round. The first 3 races are settled — their official total is
+// fixed. Only Bol d'Or (R4) is built live from the entered milestone parts.
+function lsRoundTotal(row, rkey) {
+  if (rkey !== 'R4') return row[rkey] ?? 0;
+  if (lsRoundEntered(row.team, 'R4')) {
+    return LS_ROUNDS.find(x => x.key === 'R4').parts
+      .reduce((s, p) => s + (parseFloat(lsData[row.team]['R4'][p]) || 0), 0);
+  }
+  return 0;
+}
+// Championship total = best 3 of the 4 round totals.
+function lsChampTotal(row) {
+  const totals = LS_ROUNDS.map(r => lsRoundTotal(row, r.key));
+  return totals.slice().sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
+}
+// Max reachable championship total if the team maxes out Bol d'Or (65 pts).
+function lsCeiling(row) {
+  const done = LS_ROUNDS.slice(0, 3).map(r => lsRoundTotal(row, r.key));
+  const r4 = lsRoundTotal(row, 'R4');
+  const four = [...done, Math.max(r4, LS_R4_MAX)];
+  return four.slice().sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
+}
+
+// ── Table ─────────────────────────────────────────────────────
+function lsRenderHead() {
+  const head = document.getElementById('ls-head');
+  let r1 = `<tr><th class="ls-team" rowspan="2">Team</th><th class="ls-rank" rowspan="2">#</th>`;
+  let r2 = `<tr>`;
+  LS_ROUNDS.forEach((r, i) => {
+    const cls = i % 2 === 0 ? 'ls-grp-a' : 'ls-grp-b';
+    if (r.key === 'R4') {
+      // Live round: keep the per-milestone breakdown columns.
+      r1 += `<th class="ls-grp ${cls}" colspan="${r.parts.length + 1}">${r.name}<small>${r.loc} · ${r.dur}</small></th>`;
+      r.parts.forEach(p => { r2 += `<th class="ls-sub ${cls}">${LS_PART_LABEL[p]}</th>`; });
+      r2 += `<th class="ls-sub ${cls}">Σ</th>`;
+    } else {
+      // Settled race: a single static points column.
+      r1 += `<th class="ls-grp ${cls}" rowspan="2">${r.name}<small>${r.loc} · ${r.dur}</small></th>`;
+    }
+  });
+  r1 += `<th class="ls-champ" rowspan="2">Champ</th></tr>`;
+  r2 += `</tr>`;
+  head.innerHTML = r1 + r2;
+}
+
+function lsRenderBody() {
+  const rows = LS_SEED.map(row => ({ row, champ: lsChampTotal(row) }))
+    .sort((a, b) => b.champ - a.champ || lsOfficialSum(b.row) - lsOfficialSum(a.row));
+
+  const body = document.getElementById('ls-body');
+  body.innerHTML = rows.map(({ row, champ }, idx) => {
+    const us = row.team === LS_US;
+    const id = lsId(row.team);
+    let cells = '';
+    LS_ROUNDS.forEach((r, i) => {
+      const cls = i % 2 === 0 ? 'ls-grp-a' : 'ls-grp-b';
+      if (r.key !== 'R4') {
+        // Settled race → single static points cell.
+        cells += `<td class="ls-static">${row[r.key] ?? 0}</td>`;
+        return;
+      }
+      // Bol d'Or → editable milestone inputs + live Σ.
+      r.parts.forEach(p => {
+        const v = (lsData[row.team] && lsData[row.team].R4 && lsData[row.team].R4[p] != null)
+          ? lsData[row.team].R4[p] : '';
+        cells += `<td><input class="ls-in" type="number" min="0" max="${LS_PART_MAX[p]}"
+          data-team="${encodeURIComponent(row.team)}" data-round="R4" data-part="${p}"
+          value="${v}" oninput="lsEdit(this)"></td>`;
+      });
+      cells += `<td class="ls-sigma" id="ls-sig-${id}-R4">${lsRoundTotal(row, 'R4')}</td>`;
+    });
+    return `<tr class="${us ? 'ls-us' : ''}">
+      <td class="ls-team">${row.team}<small>${row.manuf}</small></td>
+      <td class="ls-rank">${idx + 1}</td>
+      ${cells}
+      <td class="ls-champ" id="ls-champ-${id}">${champ}</td>
+    </tr>`;
+  }).join('');
+}
+function lsOfficialSum(row) { return (row.R1 || 0) + (row.R2 || 0) + (row.R3 || 0); }
+
+// Live in-place update of one row's Σ + Champ cells (no re-sort while typing).
+function lsUpdateRow(team) {
+  const row = LS_SEED.find(r => r.team === team);
+  if (!row) return;
+  const id = lsId(team);
+  const sig = document.getElementById(`ls-sig-${id}-R4`);
+  if (sig) sig.textContent = lsRoundTotal(row, 'R4');
+  const champEl = document.getElementById(`ls-champ-${id}`);
+  if (champEl) champEl.textContent = lsChampTotal(row);
+}
+
+function lsEdit(el) {
+  const team = decodeURIComponent(el.dataset.team);
+  const { round, part } = el.dataset;
+  if (!lsData[team]) lsData[team] = {};
+  if (!lsData[team][round]) lsData[team][round] = {};
+  lsData[team][round][part] = el.value;
+  lsSave();
+  lsUpdateRow(team);
+  lsRenderCharts();
+  lsRenderScenarioChart();
+}
+
+function resetLiveStanding() {
+  if (!confirm('Clear all entered per-part breakdowns? Official round totals stay.')) return;
+  lsData = {};
+  lsSave();
+  renderLiveStanding();
+}
+
+// ── Charts: two stacked views of every team's championship points ──
+// Both bars reach the same ceiling (max reachable if the team wins Bol d'Or
+// outright — 65 pts). They differ only in what counts as already banked:
+//   • full      → best 3 of 4 rounds (current championship total)
+//   • dropWorst → best 2 of 4 rounds (each team's worst race removed)
+// Faded part = Bol d'Or upside, split by milestone (Qual → 8h → 16h → Finish).
+function lsRoundTotalsAll(row) { return LS_ROUNDS.map(r => lsRoundTotal(row, r.key)); }
+function lsBestN(row, n) {
+  return lsRoundTotalsAll(row).slice().sort((a, b) => b - a).slice(0, n).reduce((a, b) => a + b, 0);
+}
+function lsAcquiredFull(row)      { return lsBestN(row, 3); }
+function lsAcquiredDropWorst(row) { return lsBestN(row, 2); }
+
+// Our guaranteed championship floor: best 3 of our completed rounds, treating
+// Bol d'Or as 0 (worst case). We can only finish at or above this. A rival
+// whose absolute ceiling can't exceed it can never out-point us.
+function lsUsFloor() {
+  const us = LS_SEED.find(r => r.team === LS_US);
+  if (!us) return 0;
+  const done = [lsRoundTotal(us, 'R1'), lsRoundTotal(us, 'R2'), lsRoundTotal(us, 'R3'), 0];
+  return done.sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
+}
+function lsCanBeatUs(row) { return row.team === LS_US || lsCeiling(row) > lsUsFloor(); }
+
+// Draws values inside each bar segment (right-aligned) plus two bold SUMs:
+// the banked total at the end of the solid section, and the ceiling total
+// just past the end of the faded (max-available) section.
+const lsBarLabels = {
+  id: 'lsBarLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const ds = chart.data.datasets;
+    const n = chart.data.labels.length;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 3; // stay readable on light bars
+    for (let i = 0; i < n; i++) {
+      // inner values for the faded milestone segments (datasets 1..)
+      ctx.font = '10px Segoe UI, Arial';
+      for (let di = 1; di < ds.length; di++) {
+        const v = ds[di].data[i];
+        if (!v) continue;
+        const el = chart.getDatasetMeta(di).data[i];
+        if (el.x - el.base < 15) continue; // too narrow to hold a number
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'right';
+        ctx.fillText(Math.round(v), el.x - 3, el.y);
+      }
+      // SUM after the point-gained (solid) section = banked total
+      const solid = chart.getDatasetMeta(0).data[i];
+      ctx.font = 'bold 11px Segoe UI, Arial';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round(ds[0].data[i]), solid.x - 4, solid.y);
+      // SUM after the possible-maximum section = ceiling total
+      const last = chart.getDatasetMeta(ds.length - 1).data[i];
+      let ceiling = 0;
+      for (let di = 0; di < ds.length; di++) ceiling += ds[di].data[i] || 0;
+      ctx.fillStyle = '#fbbf24';
+      ctx.textAlign = 'left';
+      ctx.fillText(Math.round(ceiling), last.x + 5, last.y);
+    }
+    ctx.restore();
+  }
+};
+
+function lsRenderChartInto(canvasId, wrapId, acquiredFn, key, filterFn, opts = {}) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+
+  const src = filterFn ? LS_SEED.filter(filterFn) : LS_SEED;
+  const rows = src.map(row => {
+    const acquired = acquiredFn(row);
+    const ceiling = lsCeiling(row);
+    let gain = Math.max(0, ceiling - acquired); // headroom after the best-N drop
+    // Split the headroom across Bol d'Or milestones, filling the biggest first
+    // (finish → 16h → 8h → quali) so any best-3 drop trims the marginal quali.
+    const seg = { fin: 0, h16: 0, h8: 0, q: 0 };
+    for (const p of ['fin', 'h16', 'h8', 'q']) {
+      const take = Math.min(gain, LS_PART_MAX[p]);
+      seg[p] = take; gain -= take;
+    }
+    return { row, acquired, ceiling, seg };
+  }).sort((a, b) => b.ceiling - a.ceiling || b.acquired - a.acquired);
+
+  const labels = rows.map(r => {
+    const n = r.row.team.length > 26 ? r.row.team.slice(0, 24) + '…' : r.row.team;
+    return (r.row.team === LS_US ? '★ ' : '') + n;
+  });
+  const baseColor = rows.map(r => lsColor(r.row));
+
+  const fade = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  // Segments stack in the order they happen at Bol d'Or: Qual → 8h → 16h → Finish,
+  // opacity ramping up so the biggest prize (the finish) reads strongest.
+  const datasets = [
+    {
+      label: 'Acquired', stack: 's',
+      data: rows.map(r => r.acquired),
+      backgroundColor: baseColor.map(c => fade(c, 1)),
+      borderWidth: 0,
+    },
+    { label: 'Bol d\'Or Qual (max)', stack: 's', data: rows.map(r => r.seg.q),
+      backgroundColor: baseColor.map(c => fade(c, 0.15)), borderWidth: 0 },
+    { label: 'Bol d\'Or 8h (max)', stack: 's', data: rows.map(r => r.seg.h8),
+      backgroundColor: baseColor.map(c => fade(c, 0.25)), borderWidth: 0 },
+    { label: 'Bol d\'Or 16h (max)', stack: 's', data: rows.map(r => r.seg.h16),
+      backgroundColor: baseColor.map(c => fade(c, 0.35)), borderWidth: 0 },
+    { label: 'Bol d\'Or Finish (max)', stack: 's', data: rows.map(r => r.seg.fin),
+      backgroundColor: baseColor.map(c => fade(c, 0.5)), borderWidth: 0 },
+  ];
+
+  // Height grows with the field so bars stay readable.
+  const wrap = document.getElementById(wrapId);
+  if (wrap) wrap.style.height = Math.round(Math.max(220, rows.length * 20 + 60) * (opts.heightScale || 1)) + 'px';
+
+  if (lsCharts[key]) lsCharts[key].destroy();
+  lsCharts[key] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets },
+    plugins: opts.labels ? [lsBarLabels] : [],
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      layout: opts.labels ? { padding: { right: 26 } } : {},
+      scales: {
+        x: { stacked: true, beginAtZero: true, grace: opts.labels ? '6%' : 0,
+             ticks: { color: '#888' }, grid: { color: '#1f1f1f' },
+             title: { display: true, text: 'Championship points', color: '#666' } },
+        y: { stacked: true, ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: '#141414' } },
+      },
+      plugins: {
+        legend: { labels: { color: '#aaa', font: { size: 10 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            title: items => rows[items[0].dataIndex].row.team,
+            afterBody: items => {
+              const r = rows[items[0].dataIndex];
+              return `Banked: ${r.acquired}   Ceiling: ${r.ceiling}   (+${r.ceiling - r.acquired} max)`;
+            },
+            label: ctx => ctx.parsed.x ? ` ${ctx.dataset.label}: ${ctx.parsed.x}` : null,
+          }
+        }
+      }
+    }
+  });
+}
+
+function lsRenderCharts() {
+  // Top: either the pre-race "max upside" view, or the live in-race projection.
+  if (lsInRaceMode) lsRenderTopInRace();
+  else lsRenderChartInto('ls-chart-top', 'ls-chart-top-wrap', lsAcquiredDropWorst, 'top', lsCanBeatUs,
+    { heightScale: 1.5, labels: true });
+  // Bottom: full current total, entire field.
+  lsRenderChartInto('ls-chart', 'ls-chart-wrap', lsAcquiredFull, 'full', null, {});
+}
+
+// ── In-race projection ────────────────────────────────────────
+// Once the race is running, the top chart's Bol d'Or segments are driven by
+// each team's LIVE class position. Milestones already passed (by elapsed time)
+// show solid (locked); milestones still ahead show faded, sized by the points
+// that team's current position would earn. Example: P2 at 10h → Qual & 8h solid,
+// 16h faded 9, Finish faded 33.
+let lsInRaceMode = false;
+let lsRaceElapsedH = 0;
+let lsLivePosMap = {};   // normalized team name → live class position
+
+function lsNorm(s) { return (s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+function lsBuildLivePosMap() {
+  lsLivePosMap = {};
+  if (!rawData || !rawData.Donnees) return;
+  rawData.Donnees.forEach(r => {
+    if (cleanVal(r[C.cat]) !== 'SST') return;
+    const name = cleanVal(r[C.team]);
+    const pos = parseInt(cleanVal(r[C.catPos])) || null;
+    if (name && pos) lsLivePosMap[lsNorm(name)] = pos;
+  });
+}
+
+// Live class position for a team; falls back to the predicted finishing order
+// (championship order by default) when the feed can't be matched.
+function lsLivePos(team) {
+  const key = lsNorm(team);
+  if (lsLivePosMap[key]) return lsLivePosMap[key];
+  for (const k in lsLivePosMap) {
+    if (k && (k.includes(key.slice(0, 8)) || key.includes(k.slice(0, 8)))) return lsLivePosMap[k];
+  }
+  const idx = lsFinishOrder.indexOf(team);
+  return idx >= 0 ? idx + 1 : 99;
+}
+
+// Elapsed hours inferred from the feed (24H race). Null if unknown.
+function lsFeedElapsedH() {
+  if (!rawData || rawData.TempsRestant == null) return null;
+  const h = (24 * 3600 * 1000 - rawData.TempsRestant) / 3600000;
+  return (h > 0 && h <= 24) ? h : null;
+}
+
+function lsSetInRace(on) {
+  lsInRaceMode = on;
+  const fields = document.getElementById('ls-inrace-fields');
+  if (fields) fields.hidden = !on;
+  if (on) {
+    const fe = lsFeedElapsedH();
+    if (fe != null && lsRaceElapsedH === 0) {
+      lsRaceElapsedH = Math.round(fe * 2) / 2;
+      const inp = document.getElementById('ls-inrace-hours');
+      if (inp) inp.value = lsRaceElapsedH;
+    }
+    lsBuildLivePosMap();
+  }
+  lsRenderCharts();
+}
+function lsSetElapsed(v) { lsRaceElapsedH = parseFloat(v) || 0; if (lsInRaceMode) lsRenderTopInRace(); }
+
+function lsRenderTopInRace() {
+  const canvas = document.getElementById('ls-chart-top');
+  if (!canvas) return;
+  const e = lsRaceElapsedH;
+  const passed = { q: true, h8: e >= 8, h16: e >= 16, fin: e >= 24 };
+  const note = document.getElementById('ls-inrace-note');
+  if (note) note.textContent = `— passed: Qual${passed.h8 ? ', 8h' : ''}${passed.h16 ? ', 16h' : ''}${passed.fin ? ', Finish' : ''}`;
+
+  const rows = LS_SEED.filter(lsCanBeatUs).map(row => {
+    const pos = lsLivePos(row.team);
+    const parts = lsPosParts(pos - 1);
+    const bol = parts.q + parts.h8 + parts.h16 + parts.fin;
+    const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')].sort((a, b) => b - a);
+    const locked = (done[0] || 0) + (done[1] || 0);
+    const third = done[2] || 0;
+    const counted = bol > third;
+    const seg = counted ? parts : { q: 0, h8: 0, h16: 0, fin: 0 };
+    return { row, pos, banked: locked, seg, kept: counted ? 0 : third,
+             total: locked + (counted ? bol : third) };
+  }).sort((a, b) => b.total - a.total || b.banked - a.banked);
+
+  const labels = rows.map(r => (r.row.team === LS_US ? '★ ' : '') +
+    (r.row.team.length > 26 ? r.row.team.slice(0, 24) + '…' : r.row.team) + `  P${r.pos}`);
+  const base = rows.map(r => lsColor(r.row));
+  const fade = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+  const milestone = (key, label) => ({
+    label, stack: 's', data: rows.map(r => r.seg[key]),
+    backgroundColor: base.map(c => fade(c, passed[key] ? 1 : 0.28)),
+    borderColor: '#0d0d0d', borderWidth: 1,
+  });
+
+  const datasets = [
+    { label: 'Banked (best 2)', stack: 's', data: rows.map(r => r.banked),
+      backgroundColor: base.map(c => fade(c, 1)), borderColor: '#0d0d0d', borderWidth: 1 },
+    milestone('q', 'Qual'), milestone('h8', '8h'), milestone('h16', '16h'), milestone('fin', 'Finish'),
+    { label: 'Kept round', stack: 's', data: rows.map(r => r.kept),
+      backgroundColor: rows.map(() => '#3a3a3a'), borderColor: '#0d0d0d', borderWidth: 1 },
+  ];
+
+  const wrap = document.getElementById('ls-chart-top-wrap');
+  if (wrap) wrap.style.height = Math.round(Math.max(220, rows.length * 20 + 60) * 1.5) + 'px';
+
+  if (lsCharts.top) lsCharts.top.destroy();
+  lsCharts.top = new Chart(canvas, {
+    type: 'bar', data: { labels, datasets }, plugins: [lsBarLabels],
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 26 } },
+      scales: {
+        x: { stacked: true, beginAtZero: true, grace: '6%', ticks: { color: '#888' }, grid: { color: '#1f1f1f' },
+             title: { display: true, text: `Championship points — live projection at ${e}h`, color: '#666' } },
+        y: { stacked: true, ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: '#141414' } },
+      },
+      plugins: {
+        legend: { labels: { color: '#aaa', font: { size: 10 }, boxWidth: 12 } },
+        tooltip: { callbacks: {
+          title: items => rows[items[0].dataIndex].row.team,
+          afterBody: items => {
+            const r = rows[items[0].dataIndex];
+            return `Live P${r.pos} → banked ${r.banked} + Bol d'Or (Q${r.seg.q}/8h${r.seg.h8}/16h${r.seg.h16}/Fin${r.seg.fin}) = ${r.total}`;
+          },
+          label: ctx => ctx.parsed.x ? ` ${ctx.dataset.label}: ${ctx.parsed.x}` : null,
+        } }
+      }
+    }
+  });
+}
+
+// ── Scenario: predicted Bol d'Or finishing order → live championship ──
+// A team dragged to a position is assumed to hold that position at EVERY
+// scoring milestone of the round, and banks the points for each (reg 1.34):
+//   • Qualifying   top 5  → 5,4,3,2,1                (1.34.6)
+//   • 8h partial   top 10 → 10,9,…,1                 (1.34.7)
+//   • 16h partial  top 10 → 10,9,…,1                 (1.34.7)
+//   • Race finish  top 20 → 40,33,…,1  (>12H scale)  (1.34.5)
+const LS_QUAL_PTS    = [5, 4, 3, 2, 1];
+const LS_PARTIAL_PTS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+const LS_FINISH_PTS  = [40, 33, 28, 24, 21, 19, 17, 15, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+const LS_ORDER_KEY = 'ls_finish_order_v1';
+let lsFinishOrder = [];   // team names, best → worst predicted finish
+let lsDragTeam = null;
+
+function lsFinishPtsForPos(pos0) { return LS_FINISH_PTS[pos0] || 0; }
+function lsPosParts(pos0) {
+  return { q: LS_QUAL_PTS[pos0] || 0, h8: LS_PARTIAL_PTS[pos0] || 0,
+           h16: LS_PARTIAL_PTS[pos0] || 0, fin: LS_FINISH_PTS[pos0] || 0 };
+}
+function lsPosTotal(pos0) { const p = lsPosParts(pos0); return p.q + p.h8 + p.h16 + p.fin; }
+function lsLoadFinishOrder() { try { const r = localStorage.getItem(LS_ORDER_KEY); if (r) lsFinishOrder = JSON.parse(r); } catch (e) {} }
+function lsSaveFinishOrder() { try { localStorage.setItem(LS_ORDER_KEY, JSON.stringify(lsFinishOrder)); } catch (e) {} }
+
+// Keep the order valid: drop unknown teams, append any missing (by current champ).
+function lsInitFinishOrder() {
+  const all = LS_SEED.map(r => r.team);
+  const order = lsFinishOrder.filter(t => all.includes(t));
+  const missing = all.filter(t => !order.includes(t))
+    .sort((a, b) => lsChampTotal(LS_SEED.find(r => r.team === b)) - lsChampTotal(LS_SEED.find(r => r.team === a)));
+  lsFinishOrder = [...order, ...missing];
+}
+
+function lsRenderFinishList() {
+  const box = document.getElementById('ls-finish-list');
+  if (!box) return;
+  box.innerHTML = lsFinishOrder.map((team, i) => {
+    const row = LS_SEED.find(r => r.team === team);
+    const col = lsColor(row);
+    const us = team === LS_US;
+    return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="true" data-team="${encodeURIComponent(team)}">
+      <span class="ls-fin-pos">P${i + 1}</span>
+      <span class="ls-fin-pts" title="Qual ${lsPosParts(i).q} + 8h ${lsPosParts(i).h8} + 16h ${lsPosParts(i).h16} + Finish ${lsPosParts(i).fin}">${lsPosTotal(i)}</span>
+      <span class="ls-fin-dot" style="background:${col}"></span>
+      <span class="ls-fin-name">${team}</span>
+    </div>`;
+  }).join('');
+}
+
+// One-time drag wiring (delegated on the container, survives list re-renders).
+function lsFinishListSetup() {
+  const box = document.getElementById('ls-finish-list');
+  if (!box || box._lsWired) return;
+  box._lsWired = true;
+  box.addEventListener('dragstart', e => {
+    const row = e.target.closest('.ls-fin-row'); if (!row) return;
+    lsDragTeam = decodeURIComponent(row.dataset.team);
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('ls-fin-dragging');
+  });
+  box.addEventListener('dragend', () => {
+    box.querySelectorAll('.ls-fin-dragging,.ls-fin-over').forEach(el => el.classList.remove('ls-fin-dragging', 'ls-fin-over'));
+  });
+  box.addEventListener('dragover', e => {
+    e.preventDefault();
+    const row = e.target.closest('.ls-fin-row');
+    box.querySelectorAll('.ls-fin-over').forEach(el => el.classList.remove('ls-fin-over'));
+    if (row) row.classList.add('ls-fin-over');
+  });
+  box.addEventListener('drop', e => {
+    e.preventDefault();
+    const row = e.target.closest('.ls-fin-row');
+    if (!row || !lsDragTeam) return;
+    const target = decodeURIComponent(row.dataset.team);
+    if (target !== lsDragTeam) {
+      const arr = lsFinishOrder.filter(t => t !== lsDragTeam);
+      const rect = row.getBoundingClientRect();
+      const after = (e.clientY - rect.top) > rect.height / 2;
+      arr.splice(arr.indexOf(target) + (after ? 1 : 0), 0, lsDragTeam);
+      lsFinishOrder = arr;
+      lsSaveFinishOrder();
+      lsRenderFinishList();
+      lsRenderScenarioChart();
+    }
+    lsDragTeam = null;
+  });
+}
+
+// Resulting championship if the race finishes in the current order. The team's
+// Bol d'Or round = the sum of the points for its position at every milestone.
+function lsScenarioResult(row, pos0) {
+  const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')];
+  const parts = lsPosParts(pos0);
+  const scenR4 = parts.q + parts.h8 + parts.h16 + parts.fin;
+  const sorted = done.slice().sort((a, b) => b - a);
+  const locked = (sorted[0] || 0) + (sorted[1] || 0);   // best 2 completed (always survive)
+  const third = sorted[2] || 0;                          // worst completed (dropped if BdO beats it)
+  const counted = scenR4 > third;                        // does Bol d'Or make the best-3?
+  const resulting = locked + Math.max(scenR4, third);
+  return { parts, scenR4, locked, third, counted, resulting, kept: counted ? 0 : third };
+}
+
+function lsRenderScenarioChart() {
+  const canvas = document.getElementById('ls-chart-scenario');
+  if (!canvas) return;
+  const posOf = {}; lsFinishOrder.forEach((t, i) => posOf[t] = i);
+
+  // Our resulting total + where it ranks against the whole field (status line).
+  const usRow = LS_SEED.find(r => r.team === LS_US);
+  const usRes = lsScenarioResult(usRow, posOf[LS_US] ?? 99).resulting;
+  const usRank = LS_SEED.filter(r => lsScenarioResult(r, posOf[r.team] ?? 99).resulting > usRes).length + 1;
+  const status = document.getElementById('ls-scenario-status');
+  if (status) {
+    status.textContent = `Champion-Hert → P${usRank} (${usRes} pts)`;
+    status.style.color = usRank === 1 ? '#4ade80' : '#f87171';
+  }
+
+  const rows = LS_SEED.filter(lsCanBeatUs).map(row => {
+    const s = lsScenarioResult(row, posOf[row.team] ?? 99);
+    return { row, s, total: s.resulting };
+  }).sort((a, b) => b.total - a.total || b.s.locked - a.s.locked);
+
+  const labels = rows.map(r => {
+    const n = r.row.team.length > 26 ? r.row.team.slice(0, 24) + '…' : r.row.team;
+    return (r.row.team === LS_US ? '★ ' : '') + n;
+  });
+  const baseColor = rows.map(r => lsColor(r.row));
+  const fade = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  // Solid = locked best-2 completed. Then this scenario's Bol d'Or points, split
+  // by milestone (only when the round actually counts under best-3-of-4).
+  const seg = (get) => rows.map(r => r.s.counted ? get(r.s.parts) : 0);
+  const datasets = [
+    { label: 'Banked (best 2)', stack: 's', data: rows.map(r => r.s.locked),
+      backgroundColor: baseColor.map(c => fade(c, 1)), borderWidth: 0 },
+    { label: 'Qual', stack: 's', data: seg(p => p.q),
+      backgroundColor: baseColor.map(c => fade(c, 0.18)), borderWidth: 0 },
+    { label: '8h', stack: 's', data: seg(p => p.h8),
+      backgroundColor: baseColor.map(c => fade(c, 0.28)), borderWidth: 0 },
+    { label: '16h', stack: 's', data: seg(p => p.h16),
+      backgroundColor: baseColor.map(c => fade(c, 0.38)), borderWidth: 0 },
+    { label: 'Finish', stack: 's', data: seg(p => p.fin),
+      backgroundColor: baseColor.map(c => fade(c, 0.55)), borderWidth: 0 },
+    { label: 'Kept round (BdO dropped)', stack: 's', data: rows.map(r => r.s.kept),
+      backgroundColor: rows.map(() => '#3a3a3a'), borderWidth: 0 },
+  ];
+
+  const wrap = document.getElementById('ls-chart-scenario-wrap');
+  if (wrap) wrap.style.height = Math.round(Math.max(220, rows.length * 20 + 60) * 1.5) + 'px';
+
+  if (lsCharts.scenario) lsCharts.scenario.destroy();
+  lsCharts.scenario = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets },
+    plugins: [lsBarLabels],
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 26 } },
+      scales: {
+        x: { stacked: true, beginAtZero: true, grace: '6%', ticks: { color: '#888' }, grid: { color: '#1f1f1f' },
+             title: { display: true, text: 'Championship points (this finishing order)', color: '#666' } },
+        y: { stacked: true, ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: '#141414' } },
+      },
+      plugins: {
+        legend: { labels: { color: '#aaa', font: { size: 10 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            title: items => rows[items[0].dataIndex].row.team,
+            afterBody: items => {
+              const r = rows[items[0].dataIndex]; const s = r.s;
+              const pos = (posOf[r.row.team] ?? 99) + 1;
+              const bdo = `P${pos}: Qual ${s.parts.q} + 8h ${s.parts.h8} + 16h ${s.parts.h16} + Finish ${s.parts.fin} = ${s.scenR4}`;
+              return `Bol d'Or ${bdo}${s.counted ? '' : `  (dropped — keeps ${s.third})`}\nChampionship: ${s.resulting}`;
+            },
+            label: ctx => ctx.parsed.x ? ` ${ctx.dataset.label}: ${ctx.parsed.x}` : null,
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderLiveStanding() {
+  lsRenderHead();
+  lsRenderBody();
+  lsRenderCharts();
+  lsInitFinishOrder();
+  lsRenderFinishList();
+  lsRenderScenarioChart();
+}
+lsLoad();
+lsLoadFinishOrder();
+lsFinishListSetup();
+
 // ── Main fetch ───────────────────────────────────────────────
 async function fetchData() {
   try {
@@ -1524,6 +2340,11 @@ async function fetchData() {
     renderCharts();
     if (document.getElementById('tab-stints').classList.contains('active')) {
       buildStintFilterBar(); renderStints();
+    }
+    // Keep the live in-race projection fresh from the feed.
+    lsBuildLivePosMap();
+    if (lsInRaceMode && document.getElementById('tab-livestanding').classList.contains('active')) {
+      lsRenderTopInRace();
     }
 
     if (data.Messages && data.Messages.length) {
@@ -1722,8 +2543,9 @@ function clearStorageIfSessionChanged(newTitle) {
 async function loadFromSheets() {
   try {
     console.log('No local storage found, fetching lap history from Sheets...');
-    const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(SHEETS_URL);
-    const res = await fetch(proxyUrl);
+    // Apps Script /exec serves `Access-Control-Allow-Origin: *` (on both its 302
+    // redirect and the final response), so we read it directly without a proxy.
+    const res = await fetch(SHEETS_URL);
     const data = await res.json();
     if (!data.headers || !data.rows || !data.rows.length) {
       console.log('Sheets: no data found'); return;

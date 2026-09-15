@@ -477,6 +477,56 @@ let gapChart = null;
 let lapTimesTimeChart = null;
 // gapHistory[num] = [{lap, gap}] — recorded every poll, independent of lap completion
 const gapHistory = {};
+
+// ── Flag history ─────────────────────────────────────────────
+// The feed only reports the CURRENT flag (Drapeau), so we log each change with
+// the feed's timestamp and save it with the session. Codes, decoded from the
+// timing provider's own page script (chronelec-min.js):
+//   0 green · 1 yellow · 2 red · 3 chequered · 4 yellow sector · 5 slow zone · 6 stop
+const FLAG_RED = 2;
+const flagLog = []; // [{ t: ms, flag: code }], one entry per change
+
+function recordFlag(data) {
+  if (typeof data.Drapeau !== 'number' || !data.HeureJourUTC) return;
+  const last = flagLog[flagLog.length - 1];
+  if (!last || last.flag !== data.Drapeau) {
+    flagLog.push({ t: new Date(data.HeureJourUTC).getTime(), flag: data.Drapeau });
+  }
+}
+
+// [{start, end}] intervals where the given flag was out. An interval still
+// open runs to "now" for the live session, or to the last lap of an archive.
+function flagPeriods(code) {
+  const live = rawData?.Titre && activeSessionKey === sessionKey(rawData.Titre);
+  const lastLap = Math.max(0, ...Object.values(teamData).flatMap(td => td.laps.map(l => l.tsMs || 0)));
+  const openEnd = live ? new Date(rawData.HeureJourUTC).getTime() : lastLap;
+  return flagLog
+    .map((e, i) => e.flag === code ? { start: e.t, end: flagLog[i + 1] ? flagLog[i + 1].t : openEnd } : null)
+    .filter(p => p && p.end > p.start);
+}
+
+// Chart.js plugin: red flag periods as a 20%-opacity red background band.
+const redFlagBands = {
+  id: 'redFlagBands',
+  beforeDatasetsDraw(chart) {
+    const periods = flagPeriods(FLAG_RED);
+    if (!periods.length) return;
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    ctx.save();
+    periods.forEach(p => {
+      const x1 = Math.max(a.left, x.getPixelForValue(p.start));
+      const x2 = Math.min(a.right, x.getPixelForValue(p.end));
+      if (x2 <= x1) return;
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+      ctx.fillRect(x1, a.top, x2 - x1, a.bottom - a.top);
+      ctx.fillStyle = 'rgba(248, 113, 113, 0.9)';
+      ctx.font = 'bold 10px Segoe UI, Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('RED FLAG', x1 + 4, a.bottom - 6);
+    });
+    ctx.restore();
+  }
+};
 let stintChart = null;
 let refTeam = DEFAULT_TEAMS[0]; // "us"
 let maxObservedStint = 0;
@@ -1276,7 +1326,7 @@ function renderLapTimesTimeChart(active) {
   lapTimesTimeChart = new Chart(document.getElementById('chart-laptimes-time'), {
     type: 'scatter',
     data: { datasets },
-    plugins: [lapPitLabelPluginTime],
+    plugins: [lapPitLabelPluginTime, redFlagBands],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       plugins: {
@@ -2375,6 +2425,7 @@ async function fetchData() {
     if (data.Colonnes) buildColumnMap(data.Colonnes);
     if (typeof data.FuseauHoraire === 'number') eventTzOffsetMin = data.FuseauHoraire;
     clearStorageIfSessionChanged(data.Titre);
+    recordFlag(data);
 
     document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
     document.getElementById('clock').textContent = eventClock(new Date(data.HeureJourUTC).getTime(), {second:'2-digit'});
@@ -2524,7 +2575,7 @@ async function saveToStorage() {
   const title = rawData.Titre;
   const { event, session } = splitEventSession(title);
   activeSessionKey = sessionKey(title);
-  const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
+  const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount, flagLog,
                   sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
   try {
     await idbPut({ key: activeSessionKey, title, event, session,
@@ -2551,6 +2602,8 @@ async function loadSessionData(key) {
     Object.assign(prevPitCount, state.prevPitCount || {});
     Object.assign(teamColors, state.teamColors || {});
     Object.assign(gapHistory, state.gapHistory || {});
+    flagLog.length = 0;
+    (state.flagLog || []).forEach(e => flagLog.push(e));
     (state.sentLaps || []).forEach(k => sentLaps.add(k));
     console.log(`Loaded session: ${state.sessionTitle} (${Object.keys(teamData).length} teams)`);
     return state.sessionTitle;
@@ -2609,6 +2662,7 @@ async function deleteCurrentSession() {
       await switchToSession(remaining[0].key);
     } else {
       [teamData, prevLapCount, prevPitCount, gapHistory].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+      flagLog.length = 0;
       sentLaps.clear();
       activeSessionKey = null;
       renderCharts();
@@ -2631,6 +2685,7 @@ function clearStorageIfSessionChanged(newTitle) {
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
     Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
+    flagLog.length = 0;
     sentLaps.clear();
   }
 }

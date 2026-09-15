@@ -190,8 +190,10 @@
     <div>Updated: <b id="last-update">—</b></div>
     <div style="display:flex;align-items:center;gap:6px">
       <select id="session-picker" onchange="switchToSession(this.value)"
-        style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:2px 6px;border-radius:4px;font-size:11px;max-width:220px">
+        style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:2px 6px;border-radius:4px;font-size:11px;max-width:240px">
       </select>
+      <button id="session-del" title="Delete this saved session" onclick="deleteCurrentSession()"
+        style="background:#3a1a1a;border:1px solid #5a2a2a;color:#f87171;padding:2px 8px;border-radius:4px;font-size:12px;cursor:pointer;line-height:1">✕</button>
     </div>
   </div>
 </header>
@@ -436,14 +438,19 @@ function buildColumnMap(colonnes) {
   };
 }
 
-const DEFAULT_TEAMS = ['38','25','77','41','19','43','52','64','93'];
+// Top 8 SST championship contenders (car numbers), selected by default.
+// 38 Champion-Hert (us) · 49 Revo-M2 · 27 TRT27 · 41 Dafy-Kaedear ·
+// 25 Team Étoile · 44 Honda No Limits · 9 TEAM TECMAS · 77 Wójcik.
+const DEFAULT_TEAMS = ['38','49','27','41','25','44','9','77'];
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz5cYKuhRC4vLKTo9lMMTTzvlERIgrP4tQaM0DoraGCdS28WMvMuSEdGeSfkeNGGs79/exec';
 // track which laps already sent: "num-lap" keys
 const sentLaps = new Set();
 
 // Persistent colors per team number
 const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
-const FIXED_COLORS = { '38':'#ffffff', '25':'#facc15', '77':'#3b82f6', '41':'#f97316', '19':'#60a5fa', '43':'#f472b6', '52':'#34d399', '64':'#a78bfa', '93':'#f87171' };
+// Aligned with the Spa 2025 colours where they exist: 38 white (us),
+// 49 purple (Revo), 25 yellow (Étoile), 77 blue (Wójcik).
+const FIXED_COLORS = { '38':'#ffffff', '49':'#ab47bc', '27':'#fb923c', '41':'#ef4444', '25':'#fdd835', '44':'#f472b6', '9':'#22d3ee', '77':'#42a5f5' };
 const teamColors = {};
 
 // { num: { name, rider, cat, laps: [{lap, timeSec, timeStr, initials, ts}] } }
@@ -2430,10 +2437,22 @@ function idbDelete(key) {
 
 function sessionKey(title) { return 'ewc_session_' + title.replace(/[^a-zA-Z0-9]/g,'_'); }
 
+// Feed titles come as "Event - Session" (e.g. "Bol d'Or - Morning Session").
+// Split them so the archive can be browsed by event, then by session.
+function splitEventSession(title) {
+  const t = (title || '').trim();
+  const i = t.indexOf(' - ');
+  return i >= 0 ? { event: t.slice(0, i).trim(), session: t.slice(i + 3).trim() }
+                : { event: t || 'Event', session: t || 'Session' };
+}
+
 async function getSessions() {
   const all = await idbGetAll();
-  return all.map(r => ({ key: r.key, title: r.title, date: r.date, savedAt: r.savedAt || 0 }))
-             .sort((a, b) => b.savedAt - a.savedAt);
+  return all.map(r => {
+    const es = splitEventSession(r.title);
+    return { key: r.key, title: r.title, event: r.event || es.event, session: r.session || es.session,
+             date: r.date, savedAt: r.savedAt || 0 };
+  }).sort((a, b) => b.savedAt - a.savedAt);
 }
 
 // One-time move of any pre-existing localStorage sessions into IndexedDB so
@@ -2459,19 +2478,18 @@ async function migrateLocalStorageToIndexedDB() {
 async function saveToStorage() {
   if (!rawData?.Titre) return;
   const title = rawData.Titre;
+  const { event, session } = splitEventSession(title);
   activeSessionKey = sessionKey(title);
   const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount,
                   sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
   try {
-    await idbPut({ key: activeSessionKey, title, date: new Date().toLocaleDateString(), savedAt: state.savedAt, state });
+    await idbPut({ key: activeSessionKey, title, event, session,
+                   date: new Date().toLocaleDateString(), savedAt: state.savedAt, state });
   } catch(e) { console.warn('Storage save failed:', e); return; }
+  // Full archive: every session is kept (browse/delete via the picker). No
+  // auto-pruning — a whole race weekend of sessions is retained.
   const sessions = await getSessions();
   if (!sessions.some(s => s.key === activeSessionKey)) buildSessionPicker();
-  const excess = sessions.filter(s => s.key !== activeSessionKey).slice(MAX_STORED_SESSIONS - 1);
-  for (const s of excess) {
-    await idbDelete(s.key);
-    console.log('Pruned old session to save space:', s.title);
-  }
 }
 
 async function loadSessionData(key) {
@@ -2517,9 +2535,43 @@ async function buildSessionPicker() {
   const sessions = await getSessions();
   const picker = document.getElementById('session-picker');
   if (!picker) return;
-  picker.innerHTML = sessions.map(s =>
-    `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${s.title} (${s.date})</option>`
+  // Group by event so the archive is browsable by event name → session.
+  const byEvent = {};
+  sessions.forEach(s => { (byEvent[s.event] = byEvent[s.event] || []).push(s); });
+  const esc = t => String(t).replace(/</g, '&lt;');
+  picker.innerHTML = Object.entries(byEvent).map(([event, list]) =>
+    `<optgroup label="${esc(event)}">` +
+    list.map(s => {
+      const when = s.savedAt
+        ? new Date(s.savedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : s.date;
+      return `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${when}</option>`;
+    }).join('') + `</optgroup>`
   ).join('');
+}
+
+// Delete the currently-selected archived session (X button).
+async function deleteCurrentSession() {
+  const picker = document.getElementById('session-picker');
+  const key = picker && picker.value;
+  if (!key) return;
+  const s = (await getSessions()).find(x => x.key === key);
+  if (!s) return;
+  if (!confirm(`Delete saved session "${s.event} — ${s.session}"?\nIts stored laps are removed permanently.`)) return;
+  await idbDelete(key);
+  if (key === activeSessionKey) {
+    const remaining = await getSessions();
+    if (remaining.length) {
+      await switchToSession(remaining[0].key);
+    } else {
+      [teamData, prevLapCount, prevPitCount, gapHistory].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+      sentLaps.clear();
+      activeSessionKey = null;
+      renderCharts();
+      renderStandings(rawData || { Donnees: [] });
+    }
+  }
+  await buildSessionPicker();
 }
 
 function clearStorageIfSessionChanged(newTitle) {

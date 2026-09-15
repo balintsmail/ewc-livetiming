@@ -812,8 +812,8 @@ function renderCharts() {
           grid: { color: '#222' }
         },
         y: {
-          min: 140,
-          max: 176,
+          min: 110,
+          max: 120,
           title: { display: true, text: 'Lap Time', color: '#666' },
           ticks: { color: '#888', callback: v => secToStr(v) },
           grid: { color: '#222' }
@@ -881,11 +881,13 @@ function tsToMs(tsStr) {
   return d.getTime();
 }
 
-// Event clock is Japan local time (Suzuka), regardless of the viewer's own
-// browser timezone -- always format displayed clock times against it.
-const EVENT_TZ = 'Asia/Tokyo';
-function jstTime(ms, opts) {
-  return new Date(ms).toLocaleTimeString([], { timeZone: EVENT_TZ, hour: '2-digit', minute: '2-digit', ...opts });
+// Clock times are shown in the event's own local time, taken from the feed's
+// FuseauHoraire (minutes east of UTC — e.g. 120 = Paris/Bol d'Or in summer),
+// so they read correctly regardless of the viewer's own browser timezone.
+let eventTzOffsetMin = 120; // updated from the feed on every poll
+function eventClock(ms, opts) {
+  return new Date(ms + eventTzOffsetMin * 60000)
+    .toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false, ...opts });
 }
 
 // Recompute every lap's clock timestamp from lap durations, anchored to the
@@ -1087,7 +1089,7 @@ function renderGapChart(active) {
               const s = ctx.parsed.y;
               const sign = s > 0 ? '+' : '';
               const timeStr = ctx.raw?.t > 1e12
-                ? ' @ ' + jstTime(ctx.raw.t)
+                ? ' @ ' + eventClock(ctx.raw.t)
                 : '';
               return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${timeStr}`;
             }
@@ -1163,7 +1165,20 @@ function renderLapTimesTimeChart(active) {
     });
   });
 
-  const yMin = 140, yMax = 176;
+  const yMin = 110, yMax = 120;
+
+  // Fix the x-axis to the session window: start (feed-now − elapsed) to
+  // end (start + elapsed + remaining) plus a 5-minute margin. TempsEcoule +
+  // TempsRestant is the session's full length (e.g. 2h practice, 24h race).
+  let xMin, xMax;
+  if (rawData && rawData.HeureJourUTC) {
+    const nowMs = new Date(rawData.HeureJourUTC).getTime();
+    const elapsed = rawData.TempsEcoule || 0;
+    const remaining = rawData.TempsRestant || 0;
+    const startMs = nowMs - elapsed;
+    xMin = startMs;
+    xMax = startMs + elapsed + remaining + 5 * 60000;
+  }
 
   // Pit stop dotted lines (like the top chart), positioned by clock time
   const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
@@ -1247,7 +1262,7 @@ function renderLapTimesTimeChart(active) {
               const l = ctx.raw?.lap;
               if (!l) return '';
               const t = ctx.raw.x > 1e12
-                ? jstTime(ctx.raw.x, {second:'2-digit'})
+                ? eventClock(ctx.raw.x, {second:'2-digit'})
                 : '';
               return ` ${ctx.dataset.label}  L${l.lap}: ${l.timeStr} ${t ? '@ '+t : ''}`;
             }
@@ -1257,10 +1272,11 @@ function renderLapTimesTimeChart(active) {
       scales: {
         x: {
           type: 'linear',
+          min: xMin, max: xMax,
           ticks: {
             color: '#888',
             maxTicksLimit: 16,
-            callback: v => v > 1e12 ? jstTime(v) : v
+            callback: v => v > 1e12 ? eventClock(v) : v
           },
           grid: { color: '#222' },
           title: { display: true, text: 'Clock Time', color: '#666' }
@@ -1502,7 +1518,7 @@ function renderStints() {
     const avg = stintAvgPace(cur);
     const pitInSec = avg !== null ? lapsLeft * avg : null;
     const pitAtMs  = pitInSec !== null ? nowMs + pitInSec * 1000 : null;
-    const pitAtStr = pitAtMs  !== null ? jstTime(pitAtMs) : '—';
+    const pitAtStr = pitAtMs  !== null ? eventClock(pitAtMs) : '—';
     const pitInStr = pitInSec !== null ? secToStr(pitInSec) : '—';
     const pct = curLen / maxStint;
     const remClass = pct >= 0.85 ? 'pit-soon' : pct >= 0.6 ? 'pit-mid' : 'pit-ok';
@@ -2330,10 +2346,11 @@ async function fetchData() {
     const data = await res.json();
     rawData = data;
     if (data.Colonnes) buildColumnMap(data.Colonnes);
+    if (typeof data.FuseauHoraire === 'number') eventTzOffsetMin = data.FuseauHoraire;
     clearStorageIfSessionChanged(data.Titre);
 
     document.getElementById('title').textContent = data.Titre || 'EWC Live Timing';
-    document.getElementById('clock').textContent = jstTime(new Date(data.HeureJourUTC).getTime(), {second:'2-digit'}) + ' JST';
+    document.getElementById('clock').textContent = eventClock(new Date(data.HeureJourUTC).getTime(), {second:'2-digit'});
     document.getElementById('remaining').textContent = msToTime(data.TempsRestant);
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
     document.getElementById('status-dot').classList.add('live');

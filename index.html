@@ -519,7 +519,39 @@ function catColor(cat) {
   return { EWC: '#3b82f6', SST: '#f59e0b', PRD: '#22c55e' }[cat] || '#94a3b8';
 }
 
+// ── T-bikes (spare bikes) ───────────────────────────────────
+// In practice a team can run a second bike, shown with a T after the number
+// ("37 T", "12T", "37 T2"). Normalise the spelling to "NN T[n]" and tie each
+// T-bike to its parent car: same colour, dashed line, auto-selected with it.
+const T_SUFFIX = /\s*(T\d*)$/i;
+function normNum(raw) { return String(raw || '').trim().replace(T_SUFFIX, (m, t) => ' ' + t.toUpperCase()); }
+function isTBike(num) { return T_SUFFIX.test(String(num)); }
+function baseNum(num) { return String(num).replace(T_SUFFIX, '').trim(); }
+
+// Default teams first (each main bike followed by its T-bikes), then by number.
+function compareNums(a, b) {
+  const ai = DEFAULT_TEAMS.indexOf(baseNum(a)), bi = DEFAULT_TEAMS.indexOf(baseNum(b));
+  if (ai !== bi) {
+    if (ai < 0) return 1;
+    if (bi < 0) return -1;
+    return ai - bi;
+  }
+  return (parseInt(baseNum(a)) - parseInt(baseNum(b))) || a.localeCompare(b);
+}
+
+// The first time a T-bike appears, select it if its main bike is selected.
+// Only on first sight, so deselecting it by hand sticks.
+const seenNums = new Set();
+function autoSelectTBikes() {
+  Object.keys(teamData).forEach(num => {
+    if (seenNums.has(num)) return;
+    seenNums.add(num);
+    if (isTBike(num) && activeTeams.has(baseNum(num))) activeTeams.add(num);
+  });
+}
+
 function colorForTeam(num) {
+  if (isTBike(num)) return (teamColors[num] = colorForTeam(baseNum(num)));
   if (FIXED_COLORS[num]) return (teamColors[num] = FIXED_COLORS[num]);
   if (!teamColors[num]) teamColors[num] = PALETTE[Object.keys(teamColors).length % PALETTE.length];
   return teamColors[num];
@@ -582,14 +614,8 @@ function buildTeamFilterBar() {
   bar.innerHTML = '';
   bar.appendChild(label);
 
-  const allNums = Object.keys(teamData).sort((a,b) => {
-    // put default teams first
-    const ai = DEFAULT_TEAMS.indexOf(a), bi = DEFAULT_TEAMS.indexOf(b);
-    if (ai >= 0 && bi >= 0) return ai - bi;
-    if (ai >= 0) return -1;
-    if (bi >= 0) return 1;
-    return parseInt(a) - parseInt(b);
-  });
+  autoSelectTBikes();
+  const allNums = Object.keys(teamData).sort(compareNums);
 
   allNums.forEach(num => {
     const btn = document.createElement('button');
@@ -678,13 +704,14 @@ function renderCharts() {
       label: label,
       data: td.laps.map(l => ({ x: l.lap, y: l.timeSec, excluded: l.excluded, lap: l })),
       backgroundColor: td.laps.map(l => l.excluded ? '#555' : col + 'cc'),
-      pointRadius: td.laps.map(l => l.excluded ? 1 : 2),
+      pointRadius: td.laps.map(l => l.excluded ? 1 : (isTBike(num) ? 3 : 2)),
+      pointStyle: isTBike(num) ? 'triangle' : 'circle',
       pointHoverRadius: 4,
       showLine: false,
       parsing: false,
     });
 
-    // Line: 10-lap moving average
+    // Line: 10-lap moving average (dashed for a T-bike)
     const avgPts = td.laps
       .map((l, i) => avgs[i] !== null ? { x: l.lap, y: avgs[i] } : null)
       .filter(Boolean);
@@ -693,6 +720,7 @@ function renderCharts() {
       label: `_avg_${num}`,   // prefixed with _ to hide from legend
       data: avgPts,
       borderColor: col,
+      borderDash: isTBike(num) ? [6, 4] : [],
       backgroundColor: 'transparent',
       borderWidth: 2.5,
       tension: lineTension,
@@ -1138,7 +1166,8 @@ function renderLapTimesTimeChart(active) {
       label: teamLabel(num),
       data: pts,
       backgroundColor: td.laps.map(l => (l.excluded ? '#555' : col + 'cc')),
-      pointRadius: 3,
+      pointRadius: isTBike(num) ? 4 : 3,
+      pointStyle: isTBike(num) ? 'triangle' : 'circle',
       pointHoverRadius: 6,
       parsing: false,
     });
@@ -1156,6 +1185,7 @@ function renderLapTimesTimeChart(active) {
       label: `_avg_time_${num}`,   // prefixed with _ to hide from legend
       data: avgPts,
       borderColor: col,
+      borderDash: isTBike(num) ? [6, 4] : [],
       backgroundColor: 'transparent',
       borderWidth: 2.5,
       tension: lineTension,
@@ -1336,7 +1366,7 @@ function updateLapHistory(data) {
   // lap timestamps for everyone looking at the same shared data.
   const feedNowMs = data.HeureJourUTC ? new Date(data.HeureJourUTC).getTime() : Date.now();
   data.Donnees.forEach(r => {
-    const num = cleanVal(r[C.num]);
+    const num = normNum(cleanVal(r[C.num]));
     const rider = cleanVal(r[C.rider]);
     const lapCount = parseInt(cleanVal(r[C.laps])) || 0;
     const lastLapRaw = r[C.lastLap];
@@ -1433,12 +1463,8 @@ function buildStintFilterBar() {
   const bar = document.getElementById('stint-team-filter-bar');
   if (!bar) return;
   bar.innerHTML = '';
-  const allNums = Object.keys(teamData).sort((a,b) => {
-    const ai = DEFAULT_TEAMS.indexOf(a), bi = DEFAULT_TEAMS.indexOf(b);
-    if (ai >= 0 && bi >= 0) return ai - bi;
-    if (ai >= 0) return -1; if (bi >= 0) return 1;
-    return parseInt(a) - parseInt(b);
-  });
+  autoSelectTBikes();
+  const allNums = Object.keys(teamData).sort(compareNums);
   allNums.forEach(num => {
     const btn = document.createElement('button');
     btn.className = 'team-toggle' + (activeTeams.has(num) ? ' on' : '');
@@ -2032,6 +2058,7 @@ function lsBuildLivePosMap() {
   if (!rawData || !rawData.Donnees) return;
   rawData.Donnees.forEach(r => {
     if (cleanVal(r[C.cat]) !== 'SST') return;
+    if (isTBike(normNum(cleanVal(r[C.num])))) return; // spare bike: the main bike is the team's entry
     const name = cleanVal(r[C.team]);
     const pos = parseInt(cleanVal(r[C.catPos])) || null;
     if (name && pos) lsLivePosMap[lsNorm(name)] = pos;

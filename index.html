@@ -3244,7 +3244,10 @@ async function loadFromStorage() {
 const VIEW_KEY = new URLSearchParams(location.search).get('view');
 async function switchToSession(key) {
   if (!key) return; // the "● Live" placeholder
+  if (key === '__live__') { location.href = location.pathname; return; }
   if (!VIEW_KEY) {
+    // Archives open in another tab so this one keeps recording. If the browser
+    // opens it here instead, the banner below makes that obvious.
     window.open(`${location.pathname}?view=${encodeURIComponent(key)}`, '_blank');
     buildSessionPicker(); // put the live tab's picker back on the live session
     return;
@@ -3269,8 +3272,10 @@ async function buildSessionPicker() {
   sessions.forEach(s => { (byEvent[s.event] = byEvent[s.event] || []).push(s); });
   const esc = t => String(t).replace(/</g, '&lt;');
   // The live session isn't archived until its first lap: show it anyway.
-  const liveOpt = activeSessionKey && !sessions.some(s => s.key === activeSessionKey) && rawData?.Titre
-    ? `<option value="" selected>● Live — ${esc(splitEventSession(rawData.Titre).session)}</option>` : '';
+  const liveOpt = VIEW_KEY
+    ? `<option value="__live__">← Back to live</option>`
+    : (activeSessionKey && !sessions.some(s => s.key === activeSessionKey) && rawData?.Titre
+        ? `<option value="" selected>● Live — ${esc(splitEventSession(rawData.Titre).session)}</option>` : '');
   picker.innerHTML = liveOpt + Object.entries(byEvent).map(([event, list]) =>
     `<optgroup label="${esc(event)}">` +
     list.map(s => `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${sessionDayLabel(s)}</option>`).join('') +
@@ -3389,6 +3394,12 @@ DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
       await buildSessionPicker();
       document.getElementById('title').textContent = `${title || 'Session'} — archive`;
       document.getElementById('status-dot').style.background = '#64748b';
+      // Live recording only happens on the live page, so say so loudly.
+      const bar = document.createElement('div');
+      bar.style.cssText = 'background:#7c2d12;color:#fed7aa;padding:6px 16px;font-size:12px;display:flex;align-items:center;gap:12px';
+      bar.innerHTML = `<b>Archive view</b> — this page is not recording the live session.
+        <a href="${location.pathname}" style="background:#16a34a;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none">← Back to live</a>`;
+      document.querySelector('header').after(bar);
       rebuildGapHistory();
       buildStintFilterBar();
     } catch (e) { console.error('Archive view failed:', e); }

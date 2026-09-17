@@ -319,6 +319,16 @@
       </table>
     </div>
   </div>
+
+  <div class="chart-card">
+    <h3>Laps &amp; sectors — this session
+      <span style="float:right;font-size:11px;color:#666;font-weight:400">
+        <span class="q-best">purple</span> = session best &nbsp;·&nbsp; <span class="q-counted">green</span> = bike's own best &nbsp;·&nbsp; grey = in/out lap
+      </span>
+    </h3>
+    <div class="q-filter" id="lapsec-filter"></div>
+    <div class="q-wrap"><table class="q-table" id="lapsec-table"></table></div>
+  </div>
 </div>
 
 <!-- STINTS TAB -->
@@ -689,6 +699,33 @@ function autoSelectTBikes() {
   });
 }
 
+// Sector times (S1–S3, seconds) of the lap just completed. The feed fills the
+// sector cells in as the bike passes each split, so they're only kept when all
+// three are present and add up to the lap time; otherwise the lap has none.
+//
+// The complete S1–S3 of a lap stay visible for ~30s after the bike crosses the
+// line, so every poll also caches each bike's last complete set (keyed by its
+// lap time). That covers laps recorded a poll late, after S1 has reset.
+const sectorCache = {}; // num → { lapStr, s1, s2, s3 }
+function rowSectors(r) {
+  return [C.s1, C.s2, C.s3].map(i => {
+    const v = cleanVal(r[i]);
+    return parseTime(v) ?? (/^\d+(\.\d+)?$/.test(v) ? parseFloat(v) : null);
+  });
+}
+function cacheSectors(num, r) {
+  const sec = rowSectors(r), lapStr = cleanVal(r[C.lastLap]), lapSec = parseTime(lapStr);
+  if (lapSec != null && !sec.some(v => v == null) && Math.abs(sec[0] + sec[1] + sec[2] - lapSec) <= 0.02) {
+    sectorCache[num] = { lapStr, s1: sec[0], s2: sec[1], s3: sec[2] };
+  }
+}
+function readSectors(r, lapSec, num, lapStr) {
+  const sec = rowSectors(r);
+  if (!sec.some(v => v == null) && Math.abs(sec[0] + sec[1] + sec[2] - lapSec) <= 0.02) return { s1: sec[0], s2: sec[1], s3: sec[2] };
+  const c = sectorCache[num];
+  return c && c.lapStr === lapStr ? { s1: c.s1, s2: c.s2, s3: c.s3 } : {};
+}
+
 function colorForTeam(num) {
   if (isTBike(num)) return (teamColors[num] = colorForTeam(baseNum(num)));
   if (FIXED_COLORS[num]) return (teamColors[num] = FIXED_COLORS[num]);
@@ -820,7 +857,71 @@ function movingAvg(laps, window = 10) {
 }
 
 // ── Lap time chart ───────────────────────────────────────────
+// ── Laps & sectors table (bottom of the Charts tab) ──────────
+// Every recorded lap of the selected teams (their T-bikes included), with
+// rider, time of day and sectors. Own filter: teams + rider.
+const lapSecTeams = new Set(['38']);
+let lapSecRider = ''; // '' = all riders
+
+function fmtSector(s) { return s == null ? '—' : s >= 60 ? secToStr(s) : s.toFixed(3); }
+
+function lapSecToggleTeam(base) {
+  if (lapSecTeams.has(base)) lapSecTeams.delete(base); else lapSecTeams.add(base);
+  renderLapSectorTable();
+}
+function lapSecSetRider(name) { lapSecRider = name; renderLapSectorTable(); }
+
+function renderLapSectorTable() {
+  const filterEl = document.getElementById('lapsec-filter'), table = document.getElementById('lapsec-table');
+  if (!filterEl || !table) return;
+  const bikes = Object.keys(teamData).filter(n => teamData[n].laps.length).sort(compareNums);
+  const bases = [...new Set(bikes.map(baseNum))];
+  const selected = bikes.filter(n => lapSecTeams.has(baseNum(n)));
+  const riders = [...new Set(selected.flatMap(n => teamData[n].laps.map(l => l.rider).filter(Boolean)))].sort();
+  if (lapSecRider && !riders.includes(lapSecRider)) lapSecRider = '';
+
+  // Don't rebuild the filter while it's in use (the 5s refresh would close the dropdown).
+  if (!filterEl.contains(document.activeElement)) filterEl.innerHTML = bases.map(b => {
+    const on = lapSecTeams.has(b), col = colorForTeam(b);
+    const style = on ? `border-color:${col};background:${col}22;color:${col}` : '';
+    return `<button class="team-toggle${on ? ' on' : ''}" style="${style}" title="${(teamData[b]?.name || teamNameByNum[b] || '').replace(/"/g, '&quot;')}" onclick="lapSecToggleTeam('${b}')">#${b}</button>`;
+  }).join('') +
+    `<span class="sep"></span><select onchange="lapSecSetRider(this.value)" style="background:#1a1a1a;border:1px solid #333;color:#ccc;padding:3px 6px;border-radius:4px;font-size:12px">` +
+    `<option value="">All riders</option>` + riders.map(r => `<option value="${r.replace(/"/g, '&quot;')}"${r === lapSecRider ? ' selected' : ''}>${r}</option>`).join('') +
+    `</select>`;
+
+  if (!selected.length) { table.innerHTML = `<tr><td class="q-muted">Select a team above.</td></tr>`; return; }
+
+  // Session bests across every bike (purple).
+  const allLaps = Object.values(teamData).flatMap(td => td.laps);
+  const sessionMin = k => { const v = allLaps.map(l => l[k]).filter(x => x != null); return v.length ? Math.min(...v) : null; };
+  const sBest = { timeSec: sessionMin('timeSec'), s1: sessionMin('s1'), s2: sessionMin('s2'), s3: sessionMin('s3') };
+
+  let html = `<tr><th class="q-left">Bike</th><th class="q-left">Rider</th><th>Lap</th><th>Time of day</th><th>Lap time</th><th>S1</th><th>S2</th><th>S3</th><th>Gap to own best</th></tr>`;
+  selected.forEach(n => {
+    const laps = teamData[n].laps.filter(l => !lapSecRider || l.rider === lapSecRider);
+    if (!laps.length) return;
+    const own = k => { const v = laps.filter(l => !l.excluded).map(l => l[k]).filter(x => x != null); return v.length ? Math.min(...v) : null; };
+    const oBest = { timeSec: own('timeSec'), s1: own('s1'), s2: own('s2'), s3: own('s3') };
+    const cls = (l, k) => l[k] == null ? 'q-muted' : l[k] === sBest[k] ? 'q-best' : l[k] === oBest[k] ? 'q-counted' : '';
+    const col = colorForTeam(n);
+    html += laps.map(l => {
+      const out = l.excluded || (oBest.timeSec && l.timeSec > oBest.timeSec * 1.25);
+      const gap = oBest.timeSec != null && !out ? (l.timeSec === oBest.timeSec ? '' : '+' + (l.timeSec - oBest.timeSec).toFixed(3)) : '';
+      return `<tr class="${baseNum(n) === '38' ? 'q-us' : ''}"${out ? ' style="opacity:.45"' : ''}>` +
+        `<td class="q-left"><span class="q-dot" style="background:${col}"></span>#${n}</td>` +
+        `<td class="q-left">${l.rider || '<span class="q-muted">—</span>'}</td>` +
+        `<td>${l.lap}</td><td>${l.tsMs ? eventClock(l.tsMs, { second: '2-digit' }) : ''}</td>` +
+        `<td><span class="q-time ${out ? '' : cls(l, 'timeSec')}">${l.timeStr}</span></td>` +
+        ['s1', 's2', 's3'].map(k => `<td><span class="q-time ${out ? '' : cls(l, k)}">${fmtSector(l[k])}</span></td>`).join('') +
+        `<td class="gap">${gap}</td></tr>`;
+    }).join('');
+  });
+  table.innerHTML = html;
+}
+
 function renderCharts() {
+  renderLapSectorTable();
   const active = [...activeTeams].filter(n => teamData[n]);
   const maxLap = active.length ? Math.max(...active.map(n => teamData[n].laps.length)) : 0;
   if (maxLap === 0) {
@@ -1514,6 +1615,8 @@ function updateLapHistory(data) {
   const feedNowMs = data.HeureJourUTC ? new Date(data.HeureJourUTC).getTime() : Date.now();
   data.Donnees.forEach(r => {
     const num = normNum(cleanVal(r[C.num]));
+    captureRider(num, r);
+    cacheSectors(num, r);
     const rider = cleanVal(r[C.rider]);
     const lapCount = parseInt(cleanVal(r[C.laps])) || 0;
     const lastLapRaw = r[C.lastLap];
@@ -1600,7 +1703,8 @@ function updateLapHistory(data) {
       if (timeSec === null || teamData[num].laps.some(l => l.timeStr === lastLapStr)) {
         deferLap = true;
       } else {
-        addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
+        addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st,
+                      rider: riderByNum[num] || '', ...readSectors(r, timeSec, num, lastLapStr) });
       }
     }
 
@@ -2584,7 +2688,9 @@ function qRestoreLap(num, time) {
 // Fastest valid lap per bike in one session: the feed's best lap plus every
 // recorded lap, minus cancelled laps. Recorded laps are what make a fallback
 // possible when the feed's best lap is the cancelled one.
-function sessionBest(feedBest, td) {
+// Laps before the session started belong to an earlier session (e.g. Blue laps
+// carried into Yellow) and are ignored. A lap without a timestamp is kept.
+function sessionBest(feedBest, td, startMs) {
   const out = {};
   const consider = (num, cand) => {
     if (isCancelled(num, cand.best)) return;
@@ -2593,6 +2699,7 @@ function sessionBest(feedBest, td) {
   Object.entries(feedBest || {}).forEach(([num, v]) => consider(num, { ...v }));
   Object.entries(td || {}).forEach(([num, t]) => (t.laps || []).forEach(l => {
     if (!l.timeSec) return;
+    if (startMs && l.tsMs && l.tsMs < startMs) return;
     const fb = feedBest?.[num];
     consider(num, { best: l.timeStr, sec: l.timeSec, team: fb?.team || t.name, cat: fb?.cat || t.cat, rider: fb?.rider || '' });
   }));
@@ -2604,14 +2711,14 @@ async function collectQualiSessions() {
   try {
     (await idbGetAll()).forEach(r => {
       const q = parseQualiTitle(r.title);
-      if (q) sessions.push({ ...q, key: r.key, best: sessionBest(r.state?.feedBest, r.state?.teamData) });
+      if (q) sessions.push({ ...q, key: r.key, best: sessionBest(r.state?.feedBest, r.state?.teamData, keyStartMs(r.key)) });
     });
   } catch (e) {}
   // The live session always uses the current feed.
   const lq = parseQualiTitle(rawData?.Titre);
   if (lq) {
     const key = liveSessionKey();
-    const live = { ...lq, key, best: sessionBest(feedBestSnapshot(), teamData), live: true };
+    const live = { ...lq, key, best: sessionBest(feedBestSnapshot(), teamData, keyStartMs(key)), live: true };
     const i = sessions.findIndex(s => s.key === key);
     if (i >= 0) sessions[i] = live; else sessions.push(live);
   }
@@ -2699,6 +2806,10 @@ function qToggleTeam(base) {
   renderQualifying();
 }
 
+// Sort column per table ('1', '2', 'final'): a rider colour or 'avg' (default).
+const qSort = { '1': 'avg', '2': 'avg', final: 'avg' };
+function qSortBy(table, col) { qSort[table] = col; renderQualifying(); }
+
 let qRendering = false;
 async function renderQualifying() {
   if (qRendering || !document.getElementById('q-final')) return;
@@ -2712,7 +2823,16 @@ async function renderQualifying() {
           `<span class="filter-btn" style="cursor:default"><s>#${c.num} ${c.time}</s> <a style="color:#f87171;cursor:pointer;margin-left:4px" title="Restore this lap" onclick="qRestoreLap('${c.num}','${c.time}')">✕</a></span>`).join('')
       : `<span style="font-size:11px;color:#555">No cancelled laps · click a time in Q1/Q2 to cancel it</span>`;
     const shown = rows.filter(r => qShowAll || qSelected.has(r.base));
-    const riderHead = c => `<th><span class="q-dot" style="background:${Q_RIDER_COLOR[c]}"></span>${c}</th>`;
+    // Clickable headers: sort by that column, fastest first (missing times last).
+    const sortTh = (table, col, label) => {
+      const on = (qSort[table] || 'avg') === col;
+      return `<th style="cursor:pointer" title="Sort by this column" onclick="qSortBy('${table}','${col}')">${label}${on ? ' ▲' : ''}</th>`;
+    };
+    const riderHead = (table, c) => sortTh(table, c, `<span class="q-dot" style="background:${Q_RIDER_COLOR[c]}"></span>${c}`);
+    const sortRows = (list, table, valueOf) => {
+      const col = qSort[table] || 'avg';
+      return list.slice().sort((a, b) => (valueOf(a, col) ?? Infinity) - (valueOf(b, col) ?? Infinity) || compareNums(a.base, b.base));
+    };
     const minOf = arr => { const v = arr.filter(x => x != null); return v.length ? Math.min(...v) : null; };
 
     // Q1 / Q2 tables
@@ -2720,9 +2840,9 @@ async function renderQualifying() {
       const el = document.getElementById('q-round-' + n);
       if (!hasRound[n]) { el.innerHTML = `<tr><td class="q-muted">No Q${n} data yet.</td></tr>`; return; }
       const fastest = Object.fromEntries(Q_RIDERS.map(c => [c, minOf(Object.values(grid[n][c] || {}).map(v => v.sec))]));
-      const byRound = shown.slice().sort((a, b) => (a.roundAvg[n] ?? Infinity) - (b.roundAvg[n] ?? Infinity) || (a.roundFastest[n] ?? Infinity) - (b.roundFastest[n] ?? Infinity) || compareNums(a.base, b.base));
+      const byRound = sortRows(shown, String(n), (r, col) => col === 'avg' ? (r.roundAvg[n] ?? (r.roundFastest[n] != null ? r.roundFastest[n] + 1000 : null)) : r.riders[col]['q' + n]?.sec);
       el.innerHTML =
-        `<tr><th class="q-left">Team</th>${Q_RIDERS.map(riderHead).join('')}<th>Best 2 avg (Q${n})</th></tr>` +
+        `<tr><th class="q-left">Team</th>${Q_RIDERS.map(c => riderHead(String(n), c)).join('')}${sortTh(String(n), 'avg', `Best 2 avg (Q${n})`)}</tr>` +
         byRound.map(r => {
           const cells = Q_RIDERS.map(c => {
             const t = r.riders[c]['q' + n];
@@ -2738,8 +2858,8 @@ async function renderQualifying() {
     const leader = rows.find(r => r.avg != null);
     const fastestBest = Object.fromEntries(Q_RIDERS.map(c => [c, minOf(rows.map(r => r.riders[c].best?.sec))]));
     document.getElementById('q-final').innerHTML =
-      `<tr><th>Pos</th><th class="q-left">Team</th>${Q_RIDERS.map(riderHead).join('')}<th>Qualifying time</th><th>Gap</th><th>Grid pts</th></tr>` +
-      shown.map(r => {
+      `<tr><th>Pos</th><th class="q-left">Team</th>${Q_RIDERS.map(c => riderHead('final', c)).join('')}${sortTh('final', 'avg', 'Qualifying time')}<th>Gap</th><th>Grid pts</th></tr>` +
+      sortRows(shown, 'final', (r, col) => col === 'avg' ? (r.avg ?? (r.fastest != null ? r.fastest + 1000 : null)) : r.riders[col].best?.sec).map(r => {
         const cells = Q_RIDERS.map(c => {
           const b = r.riders[c].best;
           if (!b) return `<td class="q-muted">—</td>`;
@@ -2885,6 +3005,11 @@ function idbDelete(key) {
 // midnight because the key uses the start, not the current time.
 function eventDay(ms) { return new Date(ms + eventTzOffsetMin * 60000).toISOString().slice(0, 10); }
 function titleSlug(title) { return String(title).replace(/[^a-zA-Z0-9]/g, '_'); }
+// Session start (UTC ms) from a key's date + HHMM, minus 5 min for the rounding.
+function keyStartMs(key) {
+  const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_/.exec(key || '');
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - eventTzOffsetMin * 60000 - 5 * 60000 : null;
+}
 let liveStartMs = null, liveStartTitle = null, lastElapsedMs = null;
 function liveSessionKey() {
   if (!rawData?.Titre || !rawData.HeureJourUTC) return null;
@@ -2956,6 +3081,15 @@ async function migrateLocalStorageToIndexedDB() {
   console.log(`Migrated ${oldSessions.length} session(s) from localStorage to IndexedDB`);
 }
 
+// The qualifying "Rider" column shows the rider while on track and the team
+// name while in the pits, so remember the last real rider name per bike.
+function captureRider(num, r) {
+  const nom = C.rider != null ? cleanVal(r[C.rider]).replace(/^\*\s*/, '') : '';
+  const inPit = /PitIn/i.test(cleanVal(r[C.status]));
+  const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (nom && !inPit && norm(nom) !== norm(teamNameByNum[baseNum(num)]) && !BIKE_MAKES.test(nom)) riderByNum[num] = nom;
+}
+
 // Best lap per bike as the feed reports it ({ num: { best, sec, team, cat } }).
 // Saved with every session: it covers laps set while the app wasn't open, and
 // it's what the Qualifying tab uses.
@@ -2965,12 +3099,7 @@ function feedBestSnapshot() {
     const best = cleanVal(r[C.bestLap]);
     const sec = parseTime(best);
     const num = normNum(cleanVal(r[C.num]));
-    // The qualifying "Rider" column shows the rider while on track and the team
-    // name while in the pits, so remember the last real rider name per bike.
-    const nom = C.rider != null ? cleanVal(r[C.rider]).replace(/^\*\s*/, '') : '';
-    const inPit = /PitIn/i.test(cleanVal(r[C.status]));
-    const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (nom && !inPit && norm(nom) !== norm(teamNameByNum[baseNum(num)]) && !BIKE_MAKES.test(nom)) riderByNum[num] = nom;
+    captureRider(num, r);
     if (sec === null) return;
     out[num] = { best, sec, cat: cleanVal(r[C.cat]),
                  team: cleanVal(r[C.team]) || teamNameByNum[baseNum(num)] || '',
@@ -2983,7 +3112,10 @@ async function saveToStorage() {
   if (!rawData?.Titre) return;
   const title = rawData.Titre;
   const { event, session } = splitEventSession(title);
-  activeSessionKey = liveSessionKey();
+  // Only ever save the live session. (This used to set activeSessionKey to the
+  // live key, so a session opened from the archive during a live session was
+  // saved under the live key — mixing the old session's laps into it.)
+  if (!activeSessionKey || activeSessionKey !== liveSessionKey()) return;
   // Nothing recorded yet (e.g. a finished session still showing in the feed):
   // don't create an empty archive entry.
   const feedBest = feedBestSnapshot();
@@ -3023,6 +3155,24 @@ function dedupeRecordedLaps() {
   return removed;
 }
 
+// Drop laps and flag changes from before the session started (from its key).
+// Cleans sessions saved while an archived session's data was mixed in.
+function pruneBeforeSessionStart(key) {
+  const start = keyStartMs(key);
+  if (!start) return;
+  let removed = 0;
+  Object.values(teamData).forEach(td => {
+    const keep = td.laps.filter(l => !l.tsMs || l.tsMs >= start);
+    if (keep.length === td.laps.length) return;
+    removed += td.laps.length - keep.length;
+    const keys = new Set(keep.map(l => `${l.lap}|${l.timeStr}|${l.tsMs}`));
+    td.laps = keep;
+    td.stints = (td.stints || [[]]).map(s => s.filter(l => keys.has(`${l.lap}|${l.timeStr}|${l.tsMs}`)));
+  });
+  for (let i = flagLog.length - 1; i >= 0; i--) if (flagLog[i].t < start) flagLog.splice(i, 1);
+  if (removed) console.log(`Removed ${removed} lap(s) from before this session started`);
+}
+
 async function loadSessionData(key) {
   try {
     const all = await idbGetAll();
@@ -3041,6 +3191,7 @@ async function loadSessionData(key) {
     flagLog.length = 0;
     (state.flagLog || []).forEach(e => flagLog.push(e));
     dedupeRecordedLaps();
+    pruneBeforeSessionStart(key);
     (state.sentLaps || []).forEach(k => sentLaps.add(k));
     console.log(`Loaded session: ${state.sessionTitle} (${Object.keys(teamData).length} teams)`);
     return state.sessionTitle;
@@ -3055,9 +3206,19 @@ async function loadFromStorage() {
   return loadSessionData(latest.key);
 }
 
+// Archived sessions open in their own read-only tab (?view=<key>), so the live
+// tab keeps recording the running session undisturbed.
+const VIEW_KEY = new URLSearchParams(location.search).get('view');
 async function switchToSession(key) {
   if (!key) return; // the "● Live" placeholder
-  await loadSessionData(key);
+  if (!VIEW_KEY) {
+    window.open(`${location.pathname}?view=${encodeURIComponent(key)}`, '_blank');
+    buildSessionPicker(); // put the live tab's picker back on the live session
+    return;
+  }
+  history.replaceState(null, '', `${location.pathname}?view=${encodeURIComponent(key)}`);
+  const title = await loadSessionData(key);
+  document.getElementById('title').textContent = `${title || 'Session'} — archive`;
   activeSessionKey = key;
   rebuildGapHistory();
   buildTeamFilterBar();
@@ -3116,7 +3277,10 @@ function clearStorageIfSessionChanged(newTitle) {
   // that never gets overwritten because that car isn't in the new session) keeps
   // rendering in the charts forever.
   const newKey = liveSessionKey();
-  if (activeSessionKey && newKey !== activeSessionKey) {
+  if (newKey && newKey !== activeSessionKey && !activeSessionKey && !Object.keys(teamData).length) {
+    activeSessionKey = newKey; // first live session on an empty page: nothing to clear
+    buildSessionPicker();
+  } else if (newKey && newKey !== activeSessionKey) {
     console.log(`Session switched to: ${newTitle}`);
     Object.keys(teamData).forEach(k => delete teamData[k]);
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
@@ -3183,6 +3347,20 @@ async function loadFromSheets() {
 // A failure in any of it must never block the live feed from starting.
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
 (async () => {
+  if (VIEW_KEY) {
+    // Read-only archive tab: show the chosen session, no live feed, no saving.
+    try {
+      await loadTeamNames();
+      activeSessionKey = VIEW_KEY;
+      const title = await loadSessionData(VIEW_KEY);
+      await buildSessionPicker();
+      document.getElementById('title').textContent = `${title || 'Session'} — archive`;
+      document.getElementById('status-dot').style.background = '#64748b';
+      rebuildGapHistory();
+      buildStintFilterBar();
+    } catch (e) { console.error('Archive view failed:', e); }
+    return;
+  }
   try {
     await migrateLocalStorageToIndexedDB();
     await loadFromStorage();

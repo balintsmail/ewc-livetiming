@@ -2589,19 +2589,47 @@ function idbDelete(key) {
   }));
 }
 
-// Session keys include the event-local date the session STARTED, so sessions
-// that reuse a name on another day ("Morning Session" on Tue and Thu) get their
-// own archive entry, and the 24h race keeps one key across midnight.
+// Session keys hold the event-local date AND start time of the session, e.g.
+// ewc_session_2026-09-17_1725_BOL_D_OR___Qualifying. The provider reuses names
+// ("Free Practice Sessions", likely the same for all four rider qualifyings),
+// so the name alone can't tell sessions apart.
+//
+// The start time is worked out once (feed clock − elapsed, rounded to 5 min)
+// and then kept for the session, so a red-flag clock freeze can't change it
+// mid-session. It's re-derived only when the name changes or the elapsed clock
+// resets (a new session with the same name). The 24h race keeps one key across
+// midnight because the key uses the start, not the current time.
 function eventDay(ms) { return new Date(ms + eventTzOffsetMin * 60000).toISOString().slice(0, 10); }
-function sessionKey(title, startMs) { return 'ewc_session_' + eventDay(startMs) + '_' + title.replace(/[^a-zA-Z0-9]/g, '_'); }
+function titleSlug(title) { return String(title).replace(/[^a-zA-Z0-9]/g, '_'); }
+let liveStartMs = null, liveStartTitle = null, lastElapsedMs = null;
 function liveSessionKey() {
   if (!rawData?.Titre || !rawData.HeureJourUTC) return null;
-  return sessionKey(rawData.Titre, new Date(rawData.HeureJourUTC).getTime() - (rawData.TempsEcoule || 0));
+  const now = new Date(rawData.HeureJourUTC).getTime();
+  const elapsed = rawData.TempsEcoule || 0;
+  const reset = lastElapsedMs !== null && elapsed < lastElapsedMs - 60000;
+  if (liveStartMs === null || liveStartTitle !== rawData.Titre || reset) {
+    let start = Math.round((now - elapsed) / 300000) * 300000;
+    // Page reloaded mid-session: if the session restored from storage has the
+    // same name and laps after this start, it's the same session (the start
+    // may look later after a red-flag freeze) — keep its original key.
+    const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_(.*)$/.exec(activeSessionKey || '');
+    if (liveStartMs === null && m && m[4] === titleSlug(rawData.Titre)) {
+      const prevStart = Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - eventTzOffsetMin * 60000;
+      const lastLap = Math.max(0, ...Object.values(teamData).flatMap(td => td.laps.map(l => l.tsMs || 0)));
+      if (prevStart <= start && lastLap > start) start = prevStart;
+    }
+    liveStartMs = start;
+    liveStartTitle = rawData.Titre;
+  }
+  lastElapsedMs = elapsed;
+  return `ewc_session_${eventDay(liveStartMs)}_${eventClock(liveStartMs).replace(':', '')}_${titleSlug(rawData.Titre)}`;
 }
 function sessionDayLabel(s) {
-  const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_/.exec(s.key);
+  const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_(?:(\d{2})(\d{2})_)?/.exec(s.key);
   const day = m ? m[1] : (s.lastLapMs || s.savedAt) ? eventDay(s.lastLapMs || s.savedAt) : null;
-  return day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+  if (!day) return '';
+  const date = new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return m && m[2] ? `${date} ${m[2]}:${m[3]}` : date;
 }
 
 // Feed titles come as "Event - Session" (e.g. "Bol d'Or - Morning Session").

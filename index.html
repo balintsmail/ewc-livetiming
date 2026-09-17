@@ -401,11 +401,60 @@
 </div>
 
 <script>
-// The feed now serves `Access-Control-Allow-Origin: *` itself, so we fetch it
-// directly — no CORS proxy needed. (corsproxy.io moved to a paid API key in
-// 2025 and started returning 401; going direct removes that dependency.)
-const API = 'https://fimewc.live-frclassification.fr/r1.json';
+// Timing feed. In Sept 2026 the provider moved to ewc.chronelec.com/results.php
+// (the old fimewc.live-frclassification.fr/r1.json now 404s). The new feed sends
+// no CORS headers and no public CORS proxy passes it, so the app reads it through
+// the relay in serve.py: run `python serve.py` and open http://localhost:3800.
+const API = '/feed/results.php';
 const INTERVAL = 5000;
+
+// Convert the new results.php layout into the shape the rest of the app was
+// built on (Titre / Drapeau / HeureJourUTC / TempsEcoule / TempsRestant /
+// Colonnes / Donnees). Field meanings are from the provider's own converters:
+//   session     = [event, session, circuit, flag, status, elapsedMs, remainingMs, freeze, laps, remainingLaps]
+//   flag        = 0 green · 1 yellow · 2 red · 3 chequered · 5 FCY · 7 safety car
+//   status      = 0 ready · 1 running · 2 finished
+//   competitors = [number, class, ?, ?, ?, ?, cells (column order), [[col, state]]]
+//   cell state  = 0 personal best · 1 overall best · 2 pit-in · 3 pit-out
+// The new feed has no class position, class gap or rider column, so those are
+// derived: class position/gap from the overall order, and "Nom" from the bike
+// column (what the old feed's fallback effectively showed).
+function adaptResultsFeed(n) {
+  const [eventName = '', sessionName = '', , flag, status, elapsed = 0, remaining = 0] = n.session || [];
+  const Colonnes = (n.columns || []).map(([Nom, Texte]) => ({ Nom, Texte }));
+  const col = Object.fromEntries(Colonnes.map((c, i) => [c.Nom, i]));
+
+  const leaderGap = {}, classPos = {};
+  const Donnees = (n.competitors || []).map(([, category, , , , , cells, states]) => {
+    const row = (cells || []).slice();
+    (states || []).forEach(([ci, st]) => {
+      if (st === 1) row[ci] = `${row[ci]}{meilleur-temps}`;
+      if (st === 2) row[ci] = `${row[ci]}{entree-stand}`;
+    });
+    const cat = category || row[col.Categorie] || '';
+    classPos[cat] = (classPos[cat] || 0) + 1;
+    const gapStr = String(cells?.[col.Ecart1er] ?? '');
+    const gapSec = gapStr === '-' || gapStr === '' ? 0 : parseTime(gapStr) ?? parseFloat(gapStr);
+    let classGap;
+    if (classPos[cat] === 1) { leaderGap[cat] = gapSec; classGap = '-'; }
+    else if (Number.isFinite(gapSec) && Number.isFinite(leaderGap[cat])) classGap = (gapSec - leaderGap[cat]).toFixed(3);
+    else classGap = gapStr;
+    row.push(String(classPos[cat]), classGap, cells?.[col.Vehicule] ?? '');
+    return row;
+  });
+  Colonnes.push({ Nom: 'PositionCategorie' }, { Nom: 'Ecart1erCategorie' }, { Nom: 'Nom' });
+
+  return {
+    Titre: `${eventName} - ${sessionName}`,
+    Drapeau: flag,
+    Statut: status,
+    HeureJourUTC: new Date(n.utcTimestamps || Date.now()).toISOString(),
+    TempsEcoule: elapsed,
+    TempsRestant: remaining,
+    Colonnes,
+    Donnees,
+  };
+}
 
 // Column indices — rebuilt dynamically from Colonnes in each JSON response
 let C = { status:0, pos:1, catPos:2, num:3, cat:4, nat:5, team:6, rider:7, riderNat:8, bike:9,
@@ -497,7 +546,7 @@ function recordFlag(data) {
 // [{start, end}] intervals where the given flag was out. An interval still
 // open runs to "now" for the live session, or to the last lap of an archive.
 function flagPeriods(code) {
-  const live = rawData?.Titre && activeSessionKey === sessionKey(rawData.Titre);
+  const live = rawData?.Titre && activeSessionKey === liveSessionKey();
   const lastLap = Math.max(0, ...Object.values(teamData).flatMap(td => td.laps.map(l => l.tsMs || 0)));
   const openEnd = live ? new Date(rawData.HeureJourUTC).getTime() : lastLap;
   return flagLog
@@ -732,10 +781,17 @@ function movingAvg(laps, window = 10) {
 // ── Lap time chart ───────────────────────────────────────────
 function renderCharts() {
   const active = [...activeTeams].filter(n => teamData[n]);
-  if (!active.length) return;
-
-  const maxLap = Math.max(...active.map(n => teamData[n].laps.length));
-  if (maxLap === 0) return;
+  const maxLap = active.length ? Math.max(...active.map(n => teamData[n].laps.length)) : 0;
+  if (maxLap === 0) {
+    // Nothing recorded yet (e.g. a new session just started): clear the charts
+    // so the previous session's lines don't stay on screen.
+    [lapChart, gapChart, lapTimesTimeChart].forEach(ch => ch && ch.destroy());
+    lapChart = gapChart = lapTimesTimeChart = null;
+    const head = document.getElementById('lap-table-head'), body = document.getElementById('lap-table-body');
+    if (head) head.innerHTML = '';
+    if (body) body.innerHTML = '';
+    return;
+  }
 
   const datasets = [];
 
@@ -1468,7 +1524,7 @@ function updateLapHistory(data) {
     // Pick the best available gap: prefer category gap (seconds), fall back to overall
     function parseGapVal(raw) {
       if (!raw || raw === '-') return null;
-      const lpMatch = raw.match(/^(\d+)\s*Lp\./i);
+      const lpMatch = raw.match(/^(\d+)\s*(Lp\.?|Laps?|Tours?)\b/i);
       if (lpMatch) {
         const allBests = Object.values(teamData)
           .map(td => { const b = td.laps.map(l=>l.timeSec).filter(Boolean); return b.length ? Math.min(...b) : null; })
@@ -1486,25 +1542,27 @@ function updateLapHistory(data) {
       ? 0                                           // class leader
       : (parseGapVal(gapCatRaw) ?? parseGapVal(gapOvrRaw));
 
-    if (firstSeen && lapCount > 0) {
-      const bestStr = cleanVal(r[C.bestLap]);
-      const timeSec = parseTime(bestStr);
-      if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr: bestStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
-      }
-    } else if (lapCount > prev && lapCount > 0) {
-      const timeStr = (!isPit(lastLapRaw) && lastLapStr && lastLapStr !== '-')
-        ? lastLapStr : cleanVal(r[C.bestLap]);
-      const timeSec = parseTime(timeStr);
-      if (timeSec !== null) {
-        addLapEntry({ lap: lapCount, timeSec, timeStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
+    // First sight of a bike: just note its lap count. (This used to add its best
+    // lap as a fake "current" lap, which is another way copied laps appeared.)
+    let deferLap = false;
+    if (!firstSeen && lapCount > prev && lapCount > 0) {
+      // Only ever record the last-lap cell. Two feed quirks used to create
+      // copied laps: substituting the best lap when the cell was empty or a
+      // pit-in, and the lap counter ticking one poll before the last-lap cell
+      // refreshes (so the previous lap's time was saved again). If there's no
+      // time yet, or it's a time this bike already has, wait for the next poll.
+      const timeSec = parseTime(lastLapStr);
+      if (timeSec === null || teamData[num].laps.some(l => l.timeStr === lastLapStr)) {
+        deferLap = true;
+      } else {
+        addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st });
       }
     }
 
     // always update latest gap on the team record for live display
     teamData[num].latestGap1st = gap1st;
 
-    prevLapCount[num] = lapCount;
+    if (!deferLap) prevLapCount[num] = lapCount;
   });
 }
 
@@ -2418,9 +2476,10 @@ lsFinishListSetup();
 // ── Main fetch ───────────────────────────────────────────────
 async function fetchData() {
   try {
-    const res = await fetch(`${API}?t=${Date.now()}`);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
+    const res = await fetch(`${API}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Feed HTTP ${res.status}${res.status === 404 ? ' — open the app through serve.py (python serve.py)' : ''}`);
+    const json = await res.json();
+    const data = json.competitors ? adaptResultsFeed(json) : json;
     rawData = data;
     if (data.Colonnes) buildColumnMap(data.Colonnes);
     if (typeof data.FuseauHoraire === 'number') eventTzOffsetMin = data.FuseauHoraire;
@@ -2530,7 +2589,20 @@ function idbDelete(key) {
   }));
 }
 
-function sessionKey(title) { return 'ewc_session_' + title.replace(/[^a-zA-Z0-9]/g,'_'); }
+// Session keys include the event-local date the session STARTED, so sessions
+// that reuse a name on another day ("Morning Session" on Tue and Thu) get their
+// own archive entry, and the 24h race keeps one key across midnight.
+function eventDay(ms) { return new Date(ms + eventTzOffsetMin * 60000).toISOString().slice(0, 10); }
+function sessionKey(title, startMs) { return 'ewc_session_' + eventDay(startMs) + '_' + title.replace(/[^a-zA-Z0-9]/g, '_'); }
+function liveSessionKey() {
+  if (!rawData?.Titre || !rawData.HeureJourUTC) return null;
+  return sessionKey(rawData.Titre, new Date(rawData.HeureJourUTC).getTime() - (rawData.TempsEcoule || 0));
+}
+function sessionDayLabel(s) {
+  const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_/.exec(s.key);
+  const day = m ? m[1] : (s.lastLapMs || s.savedAt) ? eventDay(s.lastLapMs || s.savedAt) : null;
+  return day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+}
 
 // Feed titles come as "Event - Session" (e.g. "Bol d'Or - Morning Session").
 // Split them so the archive can be browsed by event, then by session.
@@ -2545,8 +2617,10 @@ async function getSessions() {
   const all = await idbGetAll();
   return all.map(r => {
     const es = splitEventSession(r.title);
+    const lapTimes = Object.values(r.state?.teamData || {}).flatMap(td => (td.laps || []).map(l => l.tsMs || Infinity));
+    const lastLapMs = lapTimes.filter(Number.isFinite).reduce((m, t) => Math.max(m, t), 0);
     return { key: r.key, title: r.title, event: r.event || es.event, session: r.session || es.session,
-             date: r.date, savedAt: r.savedAt || 0 };
+             date: r.date, savedAt: r.savedAt || 0, lastLapMs: lastLapMs || null };
   }).sort((a, b) => b.savedAt - a.savedAt);
 }
 
@@ -2574,7 +2648,10 @@ async function saveToStorage() {
   if (!rawData?.Titre) return;
   const title = rawData.Titre;
   const { event, session } = splitEventSession(title);
-  activeSessionKey = sessionKey(title);
+  activeSessionKey = liveSessionKey();
+  // Nothing recorded yet (e.g. a finished session still showing in the feed):
+  // don't create an empty archive entry.
+  if (!Object.values(teamData).some(td => td.laps.length)) return;
   const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount, flagLog,
                   sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
   try {
@@ -2585,6 +2662,29 @@ async function saveToStorage() {
   // auto-pruning — a whole race weekend of sessions is retained.
   const sessions = await getSessions();
   if (!sessions.some(s => s.key === activeSessionKey)) buildSessionPicker();
+}
+
+// Remove copied laps recorded by older versions: any lap whose time exactly
+// matches an earlier lap of the same bike (a lap identical to the thousandth
+// is effectively impossible). Keeps the first occurrence; stints follow suit.
+function dedupeRecordedLaps() {
+  let removed = 0;
+  Object.values(teamData).forEach(td => {
+    const seen = new Set();
+    const keep = td.laps.filter(l => {
+      if (!l.timeStr) return true;
+      if (seen.has(l.timeStr)) return false;
+      seen.add(l.timeStr);
+      return true;
+    });
+    if (keep.length === td.laps.length) return;
+    removed += td.laps.length - keep.length;
+    const keys = new Set(keep.map(l => `${l.lap}|${l.timeStr}`));
+    td.laps = keep;
+    td.stints = (td.stints || [[]]).map(s => s.filter(l => keys.has(`${l.lap}|${l.timeStr}`)));
+  });
+  if (removed) console.log(`Removed ${removed} copied lap(s)`);
+  return removed;
 }
 
 async function loadSessionData(key) {
@@ -2604,6 +2704,7 @@ async function loadSessionData(key) {
     Object.assign(gapHistory, state.gapHistory || {});
     flagLog.length = 0;
     (state.flagLog || []).forEach(e => flagLog.push(e));
+    dedupeRecordedLaps();
     (state.sentLaps || []).forEach(k => sentLaps.add(k));
     console.log(`Loaded session: ${state.sessionTitle} (${Object.keys(teamData).length} teams)`);
     return state.sessionTitle;
@@ -2619,6 +2720,7 @@ async function loadFromStorage() {
 }
 
 async function switchToSession(key) {
+  if (!key) return; // the "● Live" placeholder
   await loadSessionData(key);
   activeSessionKey = key;
   rebuildGapHistory();
@@ -2636,14 +2738,13 @@ async function buildSessionPicker() {
   const byEvent = {};
   sessions.forEach(s => { (byEvent[s.event] = byEvent[s.event] || []).push(s); });
   const esc = t => String(t).replace(/</g, '&lt;');
-  picker.innerHTML = Object.entries(byEvent).map(([event, list]) =>
+  // The live session isn't archived until its first lap: show it anyway.
+  const liveOpt = activeSessionKey && !sessions.some(s => s.key === activeSessionKey) && rawData?.Titre
+    ? `<option value="" selected>● Live — ${esc(splitEventSession(rawData.Titre).session)}</option>` : '';
+  picker.innerHTML = liveOpt + Object.entries(byEvent).map(([event, list]) =>
     `<optgroup label="${esc(event)}">` +
-    list.map(s => {
-      const when = s.savedAt
-        ? new Date(s.savedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-        : s.date;
-      return `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${when}</option>`;
-    }).join('') + `</optgroup>`
+    list.map(s => `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${sessionDayLabel(s)}</option>`).join('') +
+    `</optgroup>`
   ).join('');
 }
 
@@ -2678,7 +2779,7 @@ function clearStorageIfSessionChanged(newTitle) {
   // lap history from a previous session/event (e.g. a different car number's laps
   // that never gets overwritten because that car isn't in the new session) keeps
   // rendering in the charts forever.
-  const newKey = sessionKey(newTitle);
+  const newKey = liveSessionKey();
   if (activeSessionKey && newKey !== activeSessionKey) {
     console.log(`Session switched to: ${newTitle}`);
     Object.keys(teamData).forEach(k => delete teamData[k]);
@@ -2687,6 +2788,8 @@ function clearStorageIfSessionChanged(newTitle) {
     Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
     flagLog.length = 0;
     sentLaps.clear();
+    activeSessionKey = newKey;
+    buildSessionPicker();
   }
 }
 

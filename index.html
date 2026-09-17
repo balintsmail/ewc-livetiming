@@ -431,6 +431,7 @@
     </div>
   </div>
   <div class="q-filter" id="q-filter"></div>
+  <div class="q-filter" id="q-cancelled"></div>
 
   <div class="chart-card"><h3>Q1 — rider sessions</h3><div class="q-wrap"><table class="q-table" id="q-round-1"></table></div></div>
   <div class="chart-card"><h3>Q2 — rider sessions</h3><div class="q-wrap"><table class="q-table" id="q-round-2"></table></div></div>
@@ -2555,14 +2556,46 @@ function parseQualiTitle(title) {
   return { rider, round: r ? (/^(1st|first|Q1)$/i.test(r[1]) ? 1 : 2) : null };
 }
 
-function bestFromLaps(td) {
+// ── Cancelled laps (e.g. deleted for track limits) ──
+// Stored per bike + lap time; a rider's time then falls back to his fastest
+// lap that isn't cancelled. Click a time in the Q1/Q2 tables to cancel it.
+const Q_CANCEL_KEY = 'q_cancelled_v1';
+let qCancelled = [];
+try { qCancelled = JSON.parse(localStorage.getItem(Q_CANCEL_KEY) || 'null') || null; } catch (e) { qCancelled = null; }
+if (!qCancelled) {
+  // Cancelled by race direction in Q1 (Blue riders), 17 Sep 2026.
+  qCancelled = [{ num: '38', time: '1:53.083' }, { num: '25', time: '1:52.378' }];
+}
+function qSaveCancelled() { try { localStorage.setItem(Q_CANCEL_KEY, JSON.stringify(qCancelled)); } catch (e) {} }
+qSaveCancelled();
+function isCancelled(num, time) { return qCancelled.some(c => c.num === num && c.time === time); }
+function qCancelLap(num, time) {
+  if (!confirm(`Cancel lap ${time} for #${num}? The rider's next valid lap will be used.`)) return;
+  if (!isCancelled(num, time)) qCancelled.push({ num, time });
+  qSaveCancelled();
+  renderQualifying();
+}
+function qRestoreLap(num, time) {
+  qCancelled = qCancelled.filter(c => !(c.num === num && c.time === time));
+  qSaveCancelled();
+  renderQualifying();
+}
+
+// Fastest valid lap per bike in one session: the feed's best lap plus every
+// recorded lap, minus cancelled laps. Recorded laps are what make a fallback
+// possible when the feed's best lap is the cancelled one.
+function sessionBest(feedBest, td) {
   const out = {};
-  Object.entries(td || {}).forEach(([num, t]) => {
-    const laps = (t.laps || []).filter(l => l.timeSec);
-    if (!laps.length) return;
-    const b = laps.reduce((a, l) => (l.timeSec < a.timeSec ? l : a));
-    out[num] = { best: b.timeStr, sec: b.timeSec, team: t.name, cat: t.cat, rider: '' };
-  });
+  const consider = (num, cand) => {
+    if (isCancelled(num, cand.best)) return;
+    if (!out[num] || cand.sec < out[num].sec) out[num] = cand;
+  };
+  Object.entries(feedBest || {}).forEach(([num, v]) => consider(num, { ...v }));
+  Object.entries(td || {}).forEach(([num, t]) => (t.laps || []).forEach(l => {
+    if (!l.timeSec) return;
+    const fb = feedBest?.[num];
+    consider(num, { best: l.timeStr, sec: l.timeSec, team: fb?.team || t.name, cat: fb?.cat || t.cat, rider: fb?.rider || '' });
+  }));
   return out;
 }
 
@@ -2571,14 +2604,14 @@ async function collectQualiSessions() {
   try {
     (await idbGetAll()).forEach(r => {
       const q = parseQualiTitle(r.title);
-      if (q) sessions.push({ ...q, key: r.key, best: r.state?.feedBest || bestFromLaps(r.state?.teamData) });
+      if (q) sessions.push({ ...q, key: r.key, best: sessionBest(r.state?.feedBest, r.state?.teamData) });
     });
   } catch (e) {}
   // The live session always uses the current feed.
   const lq = parseQualiTitle(rawData?.Titre);
   if (lq) {
     const key = liveSessionKey();
-    const live = { ...lq, key, best: feedBestSnapshot(), live: true };
+    const live = { ...lq, key, best: sessionBest(feedBestSnapshot(), teamData), live: true };
     const i = sessions.findIndex(s => s.key === key);
     if (i >= 0) sessions[i] = live; else sessions.push(live);
   }
@@ -2673,6 +2706,11 @@ async function renderQualifying() {
   try {
     const { rows, grid, hasRound } = buildQualiModel(await collectQualiSessions());
     renderQualiFilter(rows);
+    const cancelledEl = document.getElementById('q-cancelled');
+    if (cancelledEl) cancelledEl.innerHTML = qCancelled.length
+      ? `<span style="font-size:11px;color:#888">Cancelled laps:</span>` + qCancelled.map(c =>
+          `<span class="filter-btn" style="cursor:default"><s>#${c.num} ${c.time}</s> <a style="color:#f87171;cursor:pointer;margin-left:4px" title="Restore this lap" onclick="qRestoreLap('${c.num}','${c.time}')">✕</a></span>`).join('')
+      : `<span style="font-size:11px;color:#555">No cancelled laps · click a time in Q1/Q2 to cancel it</span>`;
     const shown = rows.filter(r => qShowAll || qSelected.has(r.base));
     const riderHead = c => `<th><span class="q-dot" style="background:${Q_RIDER_COLOR[c]}"></span>${c}</th>`;
     const minOf = arr => { const v = arr.filter(x => x != null); return v.length ? Math.min(...v) : null; };
@@ -2690,7 +2728,7 @@ async function renderQualifying() {
             const t = r.riders[c]['q' + n];
             if (!t) return `<td class="q-muted">—</td>`;
             const cls = t.sec === fastest[c] ? 'q-best' : '';
-            return `<td><span class="q-time ${cls}">${t.best}</span>${t.rider ? `<span class="q-sub">${t.rider}${t.bike !== r.base ? ` · #${t.bike}` : ''}</span>` : ''}</td>`;
+            return `<td><span class="q-time ${cls}" style="cursor:pointer" title="Click to cancel this lap" onclick="qCancelLap('${t.bike}','${t.best}')">${t.best}</span>${t.rider ? `<span class="q-sub">${t.rider}${t.bike !== r.base ? ` · #${t.bike}` : ''}</span>` : ''}</td>`;
           }).join('');
           return `<tr class="${r.base === '38' ? 'q-us' : ''}">${qTeamCell(r)}${cells}<td class="q-avg">${qFmt(r.roundAvg[n])}</td></tr>`;
         }).join('');

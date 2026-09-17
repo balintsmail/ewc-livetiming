@@ -173,6 +173,26 @@
   .ls-fin-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
   .ls-fin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; }
 
+  /* ── Qualifying tab ── */
+  .q-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 14px; }
+  .q-filter .sep { width: 1px; height: 18px; background: #333; margin: 0 4px; }
+  .q-wrap { overflow-x: auto; }
+  .q-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  .q-table th { background: #1a2533; color: #90b4d6; font-weight: 600; padding: 6px 10px; text-align: center; white-space: nowrap; }
+  .q-table th.q-left, .q-table td.q-left { text-align: left; }
+  .q-table td { padding: 5px 10px; border-bottom: 1px solid #1a1a1a; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .q-table td .q-time { font-family: monospace; font-size: 13px; }
+  .q-table td .q-sub { display: block; font-size: 10px; color: #6b7785; }
+  .q-table tr:hover td { background: #141414; }
+  .q-table tr.q-us td { background: #241f0c; }
+  .q-table tr.q-us td.q-left { color: #fbbf24; font-weight: 700; }
+  .q-table td.q-pos { font-weight: 700; color: #8a95a1; width: 36px; }
+  .q-table td.q-avg { font-family: monospace; font-size: 14px; font-weight: 700; color: #fbbf24; }
+  .q-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .q-best { color: #a855f7; font-weight: 700; }
+  .q-counted { color: #4ade80; font-weight: 700; }
+  .q-muted { color: #444; }
+
   .ls-inrace-ctl { float: right; font-size: 11px; font-weight: 400; color: #9aa7b4; display: flex; align-items: center; gap: 6px; }
   .ls-inrace-ctl label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
   .ls-inrace-ctl input[type=number] { width: 52px; background: #111; border: 1px solid #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
@@ -203,6 +223,7 @@
   <div class="tab active" data-tab="charts" onclick="switchTab('charts')">Charts</div>
   <div class="tab" data-tab="stints" onclick="switchTab('stints')">Stints</div>
   <div class="tab" data-tab="livestanding" onclick="switchTab('livestanding')">Live Standing</div>
+  <div class="tab" data-tab="qualifying" onclick="switchTab('qualifying')">Qualifying</div>
 </div>
 
 <!-- STANDINGS TAB -->
@@ -400,6 +421,22 @@
   </div>
 </div>
 
+<!-- QUALIFYING TAB -->
+<div id="tab-qualifying" class="panel">
+  <div class="ls-toolbar">
+    <div class="ls-title">Qualifying — SST</div>
+    <div class="ls-legend">
+      Rider time = fastest lap from Q1 or Q2 &nbsp;·&nbsp; team time = average of its 2 fastest riders
+      &nbsp;·&nbsp; <span class="q-counted">green</span> = counts for the team &nbsp;·&nbsp; <span class="q-best">purple</span> = fastest SST time
+    </div>
+  </div>
+  <div class="q-filter" id="q-filter"></div>
+
+  <div class="chart-card"><h3>Q1 — rider sessions</h3><div class="q-wrap"><table class="q-table" id="q-round-1"></table></div></div>
+  <div class="chart-card"><h3>Q2 — rider sessions</h3><div class="q-wrap"><table class="q-table" id="q-round-2"></table></div></div>
+  <div class="chart-card"><h3>Qualifying result — average of each team's 2 fastest riders</h3><div class="q-wrap"><table class="q-table" id="q-final"></table></div></div>
+</div>
+
 <script>
 // Timing feed. In Sept 2026 the provider moved to ewc.chronelec.com/results.php
 // (the old fimewc.live-frclassification.fr/r1.json now 404s). The new feed sends
@@ -439,10 +476,12 @@ function adaptResultsFeed(n) {
     if (classPos[cat] === 1) { leaderGap[cat] = gapSec; classGap = '-'; }
     else if (Number.isFinite(gapSec) && Number.isFinite(leaderGap[cat])) classGap = (gapSec - leaderGap[cat]).toFixed(3);
     else classGap = gapStr;
-    row.push(String(classPos[cat]), classGap, cells?.[col.Vehicule] ?? '');
+    row.push(String(classPos[cat]), classGap);
+    if (col.Nom === undefined) row.push(cells?.[col.Vehicule] ?? ''); // practice feeds have no rider column
     return row;
   });
-  Colonnes.push({ Nom: 'PositionCategorie' }, { Nom: 'Ecart1erCategorie' }, { Nom: 'Nom' });
+  Colonnes.push({ Nom: 'PositionCategorie' }, { Nom: 'Ecart1erCategorie' });
+  if (col.Nom === undefined) Colonnes.push({ Nom: 'Nom' });
 
   return {
     Titre: `${eventName} - ${sessionName}`,
@@ -470,7 +509,7 @@ function buildColumnMap(colonnes) {
     num:         m['Numero']             ?? 3,
     cat:         m['Categorie']          ?? 4,
     nat:         m['Sponsors']           ?? 5,
-    team:        m['Equipe']             ?? 6,
+    team:        m['Equipe']             ?? null, // qualifying feeds have no team column
     rider:       m['Nom'] ?? m['Nom3']   ?? 7,
     riderNat:    m['Nationalite3']       ?? 8,
     bike:        m['Perso5'] ?? m['Vehicule'] ?? 9,
@@ -665,6 +704,7 @@ function switchTab(name) {
   if (name === 'charts') renderCharts();
   if (name === 'stints') { buildStintFilterBar(); renderStints(); }
   if (name === 'livestanding') renderLiveStanding();
+  if (name === 'qualifying') renderQualifying();
 }
 
 // ── Standings filter ─────────────────────────────────────────
@@ -1481,11 +1521,15 @@ function updateLapHistory(data) {
 
     const pitCount = parseInt(cleanVal(r[C.pits])) || 0;
 
+    const feedTeam = cleanVal(r[C.team]);
+    if (feedTeam) teamNameByNum[baseNum(num)] = feedTeam;
+    const teamName = feedTeam || teamNameByNum[baseNum(num)] || '';
     if (!teamData[num]) {
-      teamData[num] = { name: cleanVal(r[C.team]), rider, cat, laps: [], stints: [[]] };
+      teamData[num] = { name: teamName, rider, cat, laps: [], stints: [[]] };
       colorForTeam(num);
     } else {
       teamData[num].rider = rider;
+      if (!teamData[num].name && teamName) teamData[num].name = teamName;
     }
 
     const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
@@ -2473,6 +2517,207 @@ lsLoad();
 lsLoadFinishOrder();
 lsFinishListSetup();
 
+// ══════════════════════════════════════════════════════════════
+//  QUALIFYING — SST
+// ══════════════════════════════════════════════════════════════
+// Rules: two qualifying rounds (Q1, Q2), each a set of 20-minute sessions, one
+// per rider colour. A rider's time is his fastest lap from either round; a
+// team's qualifying time is the average of its two fastest riders. Only the
+// SST class is ranked.
+//
+// Per-session times come from the feed's own best-lap column, saved with each
+// session (feedBest); older sessions without it fall back to the fastest
+// recorded lap. T-bikes count for their team (fastest bike per rider session).
+const Q_RIDERS = ['Blue', 'Yellow', 'Red', 'Green'];
+const Q_RIDER_COLOR = { Blue: '#3b82f6', Yellow: '#facc15', Red: '#ef4444', Green: '#22c55e' };
+const Q_GRID_PTS = [5, 4, 3, 2, 1]; // reg 1.34.6: top 5 of the class on the final grid
+const qSelected = new Set(DEFAULT_TEAMS);
+let qShowAll = false;
+const teamNameByNum = {}; // car number → team name, from feeds that carry a team column
+const riderByNum = {};    // car number → last rider name seen on track this session
+
+const BIKE_MAKES = /^(BMW|Honda|Yamaha|Kawasaki|Suzuki|Aprilia|Ducati|KTM|Triumph|MV Agusta)$/i;
+async function loadTeamNames() {
+  try {
+    (await idbGetAll()).forEach(r => Object.entries(r.state?.teamData || {}).forEach(([num, td]) => {
+      if (td.name && !BIKE_MAKES.test(td.name) && !teamNameByNum[baseNum(num)]) teamNameByNum[baseNum(num)] = td.name;
+    }));
+  } catch (e) { /* storage unavailable: names fill in from the live feed */ }
+}
+
+// "1st Qualifying Session Rider Blue" → { round: 1, rider: 'Blue' }
+function parseQualiTitle(title) {
+  const t = String(title || '');
+  if (!/qualif/i.test(t)) return null;
+  const rider = Q_RIDERS.find(c => new RegExp(`\\b${c}\\b`, 'i').test(t));
+  if (!rider) return null;
+  const r = /\b(1st|first|Q1|2nd|second|Q2)\b/i.exec(t);
+  return { rider, round: r ? (/^(1st|first|Q1)$/i.test(r[1]) ? 1 : 2) : null };
+}
+
+function bestFromLaps(td) {
+  const out = {};
+  Object.entries(td || {}).forEach(([num, t]) => {
+    const laps = (t.laps || []).filter(l => l.timeSec);
+    if (!laps.length) return;
+    const b = laps.reduce((a, l) => (l.timeSec < a.timeSec ? l : a));
+    out[num] = { best: b.timeStr, sec: b.timeSec, team: t.name, cat: t.cat, rider: '' };
+  });
+  return out;
+}
+
+async function collectQualiSessions() {
+  const sessions = [];
+  try {
+    (await idbGetAll()).forEach(r => {
+      const q = parseQualiTitle(r.title);
+      if (q) sessions.push({ ...q, key: r.key, best: r.state?.feedBest || bestFromLaps(r.state?.teamData) });
+    });
+  } catch (e) {}
+  // The live session always uses the current feed.
+  const lq = parseQualiTitle(rawData?.Titre);
+  if (lq) {
+    const key = liveSessionKey();
+    const live = { ...lq, key, best: feedBestSnapshot(), live: true };
+    const i = sessions.findIndex(s => s.key === key);
+    if (i >= 0) sessions[i] = live; else sessions.push(live);
+  }
+  // Titles without "1st"/"2nd": the earliest qualifying day is Q1, later days Q2.
+  const day = s => (/^ewc_session_(\d{4}-\d{2}-\d{2})_/.exec(s.key) || [])[1] || '';
+  const firstDay = sessions.map(day).filter(Boolean).sort()[0];
+  sessions.forEach(s => { if (!s.round) s.round = day(s) > firstDay ? 2 : 1; });
+  return sessions;
+}
+
+function buildQualiModel(sessions) {
+  const grid = { 1: {}, 2: {} };   // grid[round][rider][teamNumber] = { sec, best, bike, rider, live }
+  const teams = {};
+  // Always list the championship top 8, even before they set a time.
+  DEFAULT_TEAMS.forEach(n => { teams[n] = { base: n, name: teamNameByNum[n] || '' }; });
+  sessions.forEach(s => {
+    const cell = (grid[s.round][s.rider] = grid[s.round][s.rider] || {});
+    Object.entries(s.best || {}).forEach(([num, v]) => {
+      if (v.cat !== 'SST') return;
+      const base = baseNum(num);
+      teams[base] = teams[base] || { base, name: '' };
+      if (!teams[base].name) teams[base].name = teamNameByNum[base] || (BIKE_MAKES.test(v.team || '') ? '' : v.team) || '';
+      if (!cell[base] || v.sec < cell[base].sec) cell[base] = { sec: v.sec, best: v.best, bike: num, rider: v.rider || '', live: !!s.live };
+    });
+  });
+
+  const rows = Object.values(teams).map(t => {
+    const riders = {};
+    Q_RIDERS.forEach(c => {
+      const q1 = grid[1][c]?.[t.base] || null, q2 = grid[2][c]?.[t.base] || null;
+      const best = [q1, q2].filter(Boolean).sort((a, b) => a.sec - b.sec)[0] || null;
+      riders[c] = { q1, q2, best, bestRound: best ? (best === q1 ? 1 : 2) : null };
+    });
+    const ranked = Q_RIDERS.filter(c => riders[c].best).sort((a, b) => riders[a].best.sec - riders[b].best.sec);
+    const counted = ranked.slice(0, 2);
+    const avg = counted.length === 2 ? (riders[counted[0]].best.sec + riders[counted[1]].best.sec) / 2 : null;
+    // Same rule within a single round, for the Q1 / Q2 tables.
+    const roundAvg = {};
+    [1, 2].forEach(n => {
+      const ts = Q_RIDERS.map(c => riders[c]['q' + n]?.sec).filter(v => v != null).sort((a, b) => a - b).slice(0, 2);
+      roundAvg[n] = ts.length === 2 ? (ts[0] + ts[1]) / 2 : null;
+    });
+    const fastest = ranked.length ? riders[ranked[0]].best.sec : null;
+    const roundFastest = { 1: null, 2: null };
+    [1, 2].forEach(n => { const ts = Q_RIDERS.map(c => riders[c]['q' + n]?.sec).filter(v => v != null); roundFastest[n] = ts.length ? Math.min(...ts) : null; });
+    return { ...t, riders, counted: new Set(counted), avg, roundAvg, fastest, roundFastest };
+  });
+  // Positions are over the whole SST class; the team filter only hides rows.
+  // Teams without two riders yet sort after, by their fastest single time.
+  rows.sort((a, b) => (a.avg ?? Infinity) - (b.avg ?? Infinity) || (a.fastest ?? Infinity) - (b.fastest ?? Infinity) || compareNums(a.base, b.base));
+  rows.forEach((r, i) => { r.pos = r.avg != null ? i + 1 : null; });
+  const hasRound = { 1: sessions.some(s => s.round === 1), 2: sessions.some(s => s.round === 2) };
+  return { rows, grid, hasRound };
+}
+
+function qTeamCell(r) {
+  const col = colorForTeam(r.base);
+  return `<td class="q-left"><span class="q-dot" style="background:${col}"></span>#${r.base} ${r.name || ''}</td>`;
+}
+function qFmt(sec) { return sec == null ? '—' : secToStr(sec); }
+
+function renderQualiFilter(rows) {
+  const bar = document.getElementById('q-filter');
+  if (!bar) return;
+  const order = rows.slice().sort((a, b) => compareNums(a.base, b.base));
+  bar.innerHTML =
+    `<button class="filter-btn${!qShowAll ? ' active' : ''}" onclick="qSetMode('top8')">Top 8 championship</button>` +
+    `<button class="filter-btn${qShowAll ? ' active' : ''}" onclick="qSetMode('all')">All SST</button>` +
+    `<span class="sep"></span>` +
+    order.map(r => {
+      const on = qShowAll || qSelected.has(r.base);
+      const col = colorForTeam(r.base);
+      const style = on ? `border-color:${col};background:${col}22;color:${col}` : '';
+      return `<button class="team-toggle${on ? ' on' : ''}" style="${style}" title="${(r.name || '').replace(/"/g, '&quot;')}" onclick="qToggleTeam('${r.base}')">#${r.base}</button>`;
+    }).join('');
+}
+function qSetMode(mode) {
+  qShowAll = mode === 'all';
+  if (mode === 'top8') { qSelected.clear(); DEFAULT_TEAMS.forEach(n => qSelected.add(n)); }
+  renderQualifying();
+}
+function qToggleTeam(base) {
+  if (qShowAll) { qShowAll = false; qSelected.clear(); }
+  if (qSelected.has(base)) qSelected.delete(base); else qSelected.add(base);
+  renderQualifying();
+}
+
+let qRendering = false;
+async function renderQualifying() {
+  if (qRendering || !document.getElementById('q-final')) return;
+  qRendering = true;
+  try {
+    const { rows, grid, hasRound } = buildQualiModel(await collectQualiSessions());
+    renderQualiFilter(rows);
+    const shown = rows.filter(r => qShowAll || qSelected.has(r.base));
+    const riderHead = c => `<th><span class="q-dot" style="background:${Q_RIDER_COLOR[c]}"></span>${c}</th>`;
+    const minOf = arr => { const v = arr.filter(x => x != null); return v.length ? Math.min(...v) : null; };
+
+    // Q1 / Q2 tables
+    [1, 2].forEach(n => {
+      const el = document.getElementById('q-round-' + n);
+      if (!hasRound[n]) { el.innerHTML = `<tr><td class="q-muted">No Q${n} data yet.</td></tr>`; return; }
+      const fastest = Object.fromEntries(Q_RIDERS.map(c => [c, minOf(Object.values(grid[n][c] || {}).map(v => v.sec))]));
+      const byRound = shown.slice().sort((a, b) => (a.roundAvg[n] ?? Infinity) - (b.roundAvg[n] ?? Infinity) || (a.roundFastest[n] ?? Infinity) - (b.roundFastest[n] ?? Infinity) || compareNums(a.base, b.base));
+      el.innerHTML =
+        `<tr><th class="q-left">Team</th>${Q_RIDERS.map(riderHead).join('')}<th>Best 2 avg (Q${n})</th></tr>` +
+        byRound.map(r => {
+          const cells = Q_RIDERS.map(c => {
+            const t = r.riders[c]['q' + n];
+            if (!t) return `<td class="q-muted">—</td>`;
+            const cls = t.sec === fastest[c] ? 'q-best' : '';
+            return `<td><span class="q-time ${cls}">${t.best}</span>${t.rider ? `<span class="q-sub">${t.rider}${t.bike !== r.base ? ` · #${t.bike}` : ''}</span>` : ''}</td>`;
+          }).join('');
+          return `<tr class="${r.base === '38' ? 'q-us' : ''}">${qTeamCell(r)}${cells}<td class="q-avg">${qFmt(r.roundAvg[n])}</td></tr>`;
+        }).join('');
+    });
+
+    // Final result
+    const leader = rows.find(r => r.avg != null);
+    const fastestBest = Object.fromEntries(Q_RIDERS.map(c => [c, minOf(rows.map(r => r.riders[c].best?.sec))]));
+    document.getElementById('q-final').innerHTML =
+      `<tr><th>Pos</th><th class="q-left">Team</th>${Q_RIDERS.map(riderHead).join('')}<th>Qualifying time</th><th>Gap</th><th>Grid pts</th></tr>` +
+      shown.map(r => {
+        const cells = Q_RIDERS.map(c => {
+          const b = r.riders[c].best;
+          if (!b) return `<td class="q-muted">—</td>`;
+          const cls = b.sec === fastestBest[c] ? 'q-best' : r.counted.has(c) ? 'q-counted' : '';
+          return `<td><span class="q-time ${cls}">${b.best}</span><span class="q-sub">Q${r.riders[c].bestRound}${b.rider ? ' · ' + b.rider : ''}</span></td>`;
+        }).join('');
+        const gap = r.avg != null && leader && r !== leader ? '+' + (r.avg - leader.avg).toFixed(3) : '';
+        const pts = r.pos && r.pos <= Q_GRID_PTS.length ? Q_GRID_PTS[r.pos - 1] : '';
+        return `<tr class="${r.base === '38' ? 'q-us' : ''}"><td class="q-pos">${r.pos ?? '—'}</td>${qTeamCell(r)}${cells}` +
+               `<td class="q-avg">${qFmt(r.avg)}</td><td class="gap">${gap}</td><td>${pts}</td></tr>`;
+      }).join('');
+  } finally {
+    qRendering = false;
+  }
+}
+
 // ── Main fetch ───────────────────────────────────────────────
 async function fetchData() {
   try {
@@ -2507,6 +2752,7 @@ async function fetchData() {
     if (lsInRaceMode && document.getElementById('tab-livestanding').classList.contains('active')) {
       lsRenderTopInRace();
     }
+    if (document.getElementById('tab-qualifying').classList.contains('active')) renderQualifying();
 
     if (data.Messages && data.Messages.length) {
       document.getElementById('messages').innerHTML =
@@ -2672,6 +2918,29 @@ async function migrateLocalStorageToIndexedDB() {
   console.log(`Migrated ${oldSessions.length} session(s) from localStorage to IndexedDB`);
 }
 
+// Best lap per bike as the feed reports it ({ num: { best, sec, team, cat } }).
+// Saved with every session: it covers laps set while the app wasn't open, and
+// it's what the Qualifying tab uses.
+function feedBestSnapshot() {
+  const out = {};
+  (rawData?.Donnees || []).forEach(r => {
+    const best = cleanVal(r[C.bestLap]);
+    const sec = parseTime(best);
+    const num = normNum(cleanVal(r[C.num]));
+    // The qualifying "Rider" column shows the rider while on track and the team
+    // name while in the pits, so remember the last real rider name per bike.
+    const nom = C.rider != null ? cleanVal(r[C.rider]).replace(/^\*\s*/, '') : '';
+    const inPit = /PitIn/i.test(cleanVal(r[C.status]));
+    const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (nom && !inPit && norm(nom) !== norm(teamNameByNum[baseNum(num)]) && !BIKE_MAKES.test(nom)) riderByNum[num] = nom;
+    if (sec === null) return;
+    out[num] = { best, sec, cat: cleanVal(r[C.cat]),
+                 team: cleanVal(r[C.team]) || teamNameByNum[baseNum(num)] || '',
+                 rider: riderByNum[num] || '' };
+  });
+  return out;
+}
+
 async function saveToStorage() {
   if (!rawData?.Titre) return;
   const title = rawData.Titre;
@@ -2679,8 +2948,9 @@ async function saveToStorage() {
   activeSessionKey = liveSessionKey();
   // Nothing recorded yet (e.g. a finished session still showing in the feed):
   // don't create an empty archive entry.
-  if (!Object.values(teamData).some(td => td.laps.length)) return;
-  const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount, flagLog,
+  const feedBest = feedBestSnapshot();
+  if (!Object.values(teamData).some(td => td.laps.length) && !Object.keys(feedBest).length) return;
+  const state = { sessionTitle: title, teamData, prevLapCount, prevPitCount, flagLog, feedBest,
                   sentLaps: [...sentLaps], teamColors, gapHistory, savedAt: Date.now() };
   try {
     await idbPut({ key: activeSessionKey, title, event, session,
@@ -2815,6 +3085,7 @@ function clearStorageIfSessionChanged(newTitle) {
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
     Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
     flagLog.length = 0;
+    Object.keys(riderByNum).forEach(k => delete riderByNum[k]); // a new session may have a different rider
     sentLaps.clear();
     activeSessionKey = newKey;
     buildSessionPicker();
@@ -2877,6 +3148,7 @@ DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
   try {
     await migrateLocalStorageToIndexedDB();
     await loadFromStorage();
+    await loadTeamNames();
     await buildSessionPicker();
     if (!Object.keys(teamData).length) {
       await loadFromSheets();

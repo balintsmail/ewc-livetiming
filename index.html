@@ -2686,7 +2686,7 @@ async function loadTeamNames() {
 // "1st Qualifying Session Rider Blue" → { round: 1, rider: 'Blue' }
 function parseQualiTitle(title) {
   const t = String(title || '');
-  if (!/qualif/i.test(t)) return null;
+  if (!/qualif|\bQ[12]\b/i.test(t)) return null;
   const rider = Q_RIDERS.find(c => new RegExp(`\\b${c}\\b`, 'i').test(t));
   if (!rider) return null;
   const r = /\b(1st|first|Q1|2nd|second|Q2)\b/i.exec(t);

@@ -387,7 +387,7 @@
   <div class="ls-toolbar">
     <div class="ls-title">World Cup (SST) — Championship Points</div>
     <div class="ls-legend">Best 3 of 4 rounds count &nbsp;·&nbsp; <span class="ls-us-key">Champion-Hert = us</span>
-      &nbsp;·&nbsp; Bol d'Or <b>Qual</b> already counts the provisional qualifying points (shown grey) — type a value to override</div>
+      &nbsp;·&nbsp; Bol d'Or <b>Qual</b> = final qualifying grid points (shown grey) — type a value to override</div>
     <span style="margin-left:auto"></span>
     <button class="filter-btn" onclick="renderLiveStanding()">Re-rank</button>
     <button class="filter-btn" onclick="resetLiveStanding()">Reset breakdown</button>
@@ -2050,17 +2050,30 @@ async function refreshQualiPoints(force) {
   qualiPts = next;
   return changed;
 }
+// Final Bol d'Or qualifying (SST, Q1 17 Sep + Q2 18 Sep 2026): grid points
+// 5-4-3-2-1 for the top 5 (reg 1.34.6), everyone else 0.
+//   1 #25 1:52.531 · 2 #77 1:52.839 · 3 #38 1:53.550 · 4 #49 1:53.636 · 5 #9 1:53.796
+const LS_QUAL_FINAL = {
+  'Team Étoile': 5,
+  'Wójcik Racing Team #77 SST': 4,
+  'Champion-Hert Powered by MRP': 3,
+  'Revo-M2': 2,
+  'TEAM TECMAS - MINERVA OIL': 1,
+};
 function lsQualiPoints(row) {
+  if (LS_QUAL_FINAL) return LS_QUAL_FINAL[row.team] || 0;
   const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const num = Object.keys(teamNameByNum).find(n => norm(teamNameByNum[n]) === norm(row.team));
   return (num && qualiPts[baseNum(num)]) || 0;
 }
 // A team's Bol d'Or milestone points if it holds position pos0 (0-based):
-// qualifying comes from the real qualifying grid once there is one (0 outside
-// the top 5), the 8h/16h/finish points from the position.
+// qualifying is a typed Qual value, else the qualifying result (0 outside the
+// top 5); the 8h/16h/finish points come from the position.
 function lsPartsFor(row, pos0) {
   const p = lsPosParts(pos0);
-  return { ...p, q: Object.keys(qualiPts).length ? lsQualiPoints(row) : p.q };
+  const typed = lsData[row.team]?.R4?.q;
+  if (typed !== '' && typed != null) return { ...p, q: parseFloat(typed) || 0 };
+  return { ...p, q: (LS_QUAL_FINAL || Object.keys(qualiPts).length) ? lsQualiPoints(row) : p.q };
 }
 
 function lsRoundTotal(row, rkey) {
@@ -2132,7 +2145,7 @@ function lsRenderBody() {
         const ph = p === 'q' ? lsQualiPoints(row) : 0; // provisional qualifying points
         cells += `<td><input class="ls-in" type="number" min="0" max="${LS_PART_MAX[p]}"
           data-team="${encodeURIComponent(row.team)}" data-round="R4" data-part="${p}"
-          value="${v}" placeholder="${ph || ''}" title="${p === 'q' && ph ? 'Provisional qualifying points from the Qualifying tab' : ''}"
+          value="${v}" placeholder="${ph || ''}" title="${p === 'q' && ph ? 'Qualifying grid points (final result)' : ''}"
           oninput="lsEdit(this)"></td>`;
       });
       cells += `<td class="ls-sigma" id="ls-sig-${id}-R4">${lsRoundTotal(row, 'R4')}</td>`;
@@ -2744,8 +2757,12 @@ function sessionBest(feedBest, td, startMs) {
     return laps.length ? laps[laps.length - 1].rider : '';
   };
   Object.entries(feedBest || {}).forEach(([num, v]) => consider(num, { ...v, rider: v.rider || riderOf(num) }));
+  // The feed's final best lap IS the official session result (laps deleted by
+  // race direction are already gone from it), so recorded laps only fill in
+  // when the feed has no best for a bike or its best was cancelled here.
+  const useLaps = num => !feedBest?.[num] || isCancelled(num, feedBest[num].best);
   Object.entries(td || {}).forEach(([num, t]) => (t.laps || []).forEach(l => {
-    if (!l.timeSec) return;
+    if (!l.timeSec || !useLaps(num)) return;
     if (startMs && l.tsMs && l.tsMs < startMs) return;
     const fb = feedBest?.[num];
     consider(num, { best: l.timeStr, sec: l.timeSec, team: fb?.team || t.name, cat: fb?.cat || t.cat, rider: l.rider || fb?.rider || riderOf(num) });

@@ -2729,12 +2729,18 @@ function sessionBest(feedBest, td, startMs) {
     if (isCancelled(num, cand.best)) return;
     if (!out[num] || cand.sec < out[num].sec) out[num] = cand;
   };
-  Object.entries(feedBest || {}).forEach(([num, v]) => consider(num, { ...v }));
+  // Rider name: the feed's best-lap record can miss it, but every recorded lap
+  // of a rider session carries it.
+  const riderOf = num => {
+    const laps = (td?.[num]?.laps || []).filter(l => l.rider && (!startMs || !l.tsMs || l.tsMs >= startMs));
+    return laps.length ? laps[laps.length - 1].rider : '';
+  };
+  Object.entries(feedBest || {}).forEach(([num, v]) => consider(num, { ...v, rider: v.rider || riderOf(num) }));
   Object.entries(td || {}).forEach(([num, t]) => (t.laps || []).forEach(l => {
     if (!l.timeSec) return;
     if (startMs && l.tsMs && l.tsMs < startMs) return;
     const fb = feedBest?.[num];
-    consider(num, { best: l.timeStr, sec: l.timeSec, team: fb?.team || t.name, cat: fb?.cat || t.cat, rider: fb?.rider || '' });
+    consider(num, { best: l.timeStr, sec: l.timeSec, team: fb?.team || t.name, cat: fb?.cat || t.cat, rider: l.rider || fb?.rider || riderOf(num) });
   }));
   return out;
 }
@@ -2785,14 +2791,26 @@ function buildQualiModel(sessions) {
       const best = [q1, q2].filter(Boolean).sort((a, b) => a.sec - b.sec)[0] || null;
       riders[c] = { q1, q2, best, bestRound: best ? (best === q1 ? 1 : 2) : null };
     });
+    // The two counted times must come from two different riders: one lap max
+    // per rider, even if the same rider appears in two colour groups.
+    const pickTwo = list => {
+      const out = [];
+      for (const x of list.sort((a, b) => a.sec - b.sec)) {
+        if (x.rider && out.some(o => o.rider === x.rider)) continue;
+        out.push(x);
+        if (out.length === 2) break;
+      }
+      return out;
+    };
     const ranked = Q_RIDERS.filter(c => riders[c].best).sort((a, b) => riders[a].best.sec - riders[b].best.sec);
-    const counted = ranked.slice(0, 2);
-    const avg = counted.length === 2 ? (riders[counted[0]].best.sec + riders[counted[1]].best.sec) / 2 : null;
+    const two = pickTwo(ranked.map(c => ({ c, sec: riders[c].best.sec, rider: riders[c].best.rider })));
+    const counted = two.map(x => x.c);
+    const avg = two.length === 2 ? (two[0].sec + two[1].sec) / 2 : null;
     // Same rule within a single round, for the Q1 / Q2 tables.
     const roundAvg = {};
     [1, 2].forEach(n => {
-      const ts = Q_RIDERS.map(c => riders[c]['q' + n]?.sec).filter(v => v != null).sort((a, b) => a - b).slice(0, 2);
-      roundAvg[n] = ts.length === 2 ? (ts[0] + ts[1]) / 2 : null;
+      const ts = pickTwo(Q_RIDERS.filter(c => riders[c]['q' + n]).map(c => ({ c, sec: riders[c]['q' + n].sec, rider: riders[c]['q' + n].rider })));
+      roundAvg[n] = ts.length === 2 ? (ts[0].sec + ts[1].sec) / 2 : null;
     });
     const fastest = ranked.length ? riders[ranked[0]].best.sec : null;
     const roundFastest = { 1: null, 2: null };

@@ -743,7 +743,7 @@ function switchTab(name) {
     p.classList.toggle('active', p.id === 'tab-' + name));
   if (name === 'charts') renderCharts();
   if (name === 'stints') { buildStintFilterBar(); renderStints(); }
-  if (name === 'livestanding') renderLiveStanding();
+  if (name === 'livestanding') { qualiPtsAt = 0; renderLiveStanding(); } // fresh qualifying grid
   if (name === 'qualifying') renderQualifying();
 }
 
@@ -2055,6 +2055,13 @@ function lsQualiPoints(row) {
   const num = Object.keys(teamNameByNum).find(n => norm(teamNameByNum[n]) === norm(row.team));
   return (num && qualiPts[baseNum(num)]) || 0;
 }
+// A team's Bol d'Or milestone points if it holds position pos0 (0-based):
+// qualifying comes from the real qualifying grid once there is one (0 outside
+// the top 5), the 8h/16h/finish points from the position.
+function lsPartsFor(row, pos0) {
+  const p = lsPosParts(pos0);
+  return { ...p, q: Object.keys(qualiPts).length ? lsQualiPoints(row) : p.q };
+}
 
 function lsRoundTotal(row, rkey) {
   if (rkey !== 'R4') return row[rkey] ?? 0;
@@ -2399,7 +2406,7 @@ function lsRenderTopInRace() {
 
   const rows = LS_SEED.filter(lsCanBeatUs).map(row => {
     const pos = lsLivePos(row.team);
-    const parts = { ...lsPosParts(pos - 1), q: lsQualiPoints(row) || lsPosParts(pos - 1).q };
+    const parts = lsPartsFor(row, pos - 1);
     const bol = parts.q + parts.h8 + parts.h16 + parts.fin;
     const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')].sort((a, b) => b - a);
     const locked = (done[0] || 0) + (done[1] || 0);
@@ -2494,11 +2501,12 @@ function lsRenderFinishList() {
   if (!box) return;
   box.innerHTML = lsFinishOrder.map((team, i) => {
     const row = LS_SEED.find(r => r.team === team);
+    const pp = lsPartsFor(row, i);
     const col = lsColor(row);
     const us = team === LS_US;
     return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="true" data-team="${encodeURIComponent(team)}">
       <span class="ls-fin-pos">P${i + 1}</span>
-      <span class="ls-fin-pts" title="Qual ${lsPosParts(i).q} + 8h ${lsPosParts(i).h8} + 16h ${lsPosParts(i).h16} + Finish ${lsPosParts(i).fin}">${lsPosTotal(i)}</span>
+      <span class="ls-fin-pts" title="Qual ${pp.q} (${Object.keys(qualiPts).length ? 'qualifying grid' : 'by position'}) + 8h ${pp.h8} + 16h ${pp.h16} + Finish ${pp.fin}">${pp.q + pp.h8 + pp.h16 + pp.fin}</span>
       <span class="ls-fin-dot" style="background:${col}"></span>
       <span class="ls-fin-name">${team}</span>
     </div>`;
@@ -2549,7 +2557,7 @@ function lsFinishListSetup() {
 function lsScenarioResult(row, pos0) {
   const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')];
   // Qualifying is already run, so use its real points rather than the drag position.
-  const parts = { ...lsPosParts(pos0), q: lsQualiPoints(row) || lsPosParts(pos0).q };
+  const parts = lsPartsFor(row, pos0);
   const scenR4 = parts.q + parts.h8 + parts.h16 + parts.fin;
   const sorted = done.slice().sort((a, b) => b - a);
   const locked = (sorted[0] || 0) + (sorted[1] || 0);   // best 2 completed (always survive)

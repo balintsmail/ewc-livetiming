@@ -2093,10 +2093,22 @@ function lsChampTotal(row) {
   return totals.slice().sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
 }
 // Max reachable championship total if the team maxes out Bol d'Or (65 pts).
+// Still open at Bol d'Or, per milestone: 0 once decided (a typed value, or
+// qualifying once the grid is final), otherwise the milestone's maximum.
+function lsR4Open(row, p) {
+  const v = lsData[row.team]?.R4?.[p];
+  if (v !== '' && v != null) return 0;
+  if (p === 'q' && LS_QUAL_FINAL) return 0;
+  return LS_PART_MAX[p];
+}
+// Most a team can still score at Bol d'Or: what it has won so far (qualifying,
+// typed milestones) plus the maximum of every milestone still open.
+function lsR4Max(row) {
+  return lsRoundTotal(row, 'R4') + LS_ROUNDS.find(x => x.key === 'R4').parts.reduce((s, p) => s + lsR4Open(row, p), 0);
+}
 function lsCeiling(row) {
   const done = LS_ROUNDS.slice(0, 3).map(r => lsRoundTotal(row, r.key));
-  const r4 = lsRoundTotal(row, 'R4');
-  const four = [...done, Math.max(r4, LS_R4_MAX)];
+  const four = [...done, lsR4Max(row)];
   return four.slice().sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
 }
 
@@ -2209,7 +2221,8 @@ function lsAcquiredDropWorst(row) { return lsBestN(row, 2); }
 function lsUsFloor() {
   const us = LS_SEED.find(r => r.team === LS_US);
   if (!us) return 0;
-  const done = [lsRoundTotal(us, 'R1'), lsRoundTotal(us, 'R2'), lsRoundTotal(us, 'R3'), 0];
+  // Bol d'Or points already won (qualifying, typed milestones) can't be lost.
+  const done = [lsRoundTotal(us, 'R1'), lsRoundTotal(us, 'R2'), lsRoundTotal(us, 'R3'), lsRoundTotal(us, 'R4')];
   return done.sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
 }
 function lsCanBeatUs(row) { return row.team === LS_US || lsCeiling(row) > lsUsFloor(); }
@@ -2265,14 +2278,17 @@ function lsRenderChartInto(canvasId, wrapId, acquiredFn, key, filterFn, opts = {
     const acquired = acquiredFn(row);
     const ceiling = lsCeiling(row);
     let gain = Math.max(0, ceiling - acquired); // headroom after the best-N drop
-    // Split the headroom across Bol d'Or milestones, filling the biggest first
-    // (finish → 16h → 8h → quali) so any best-3 drop trims the marginal quali.
+    // Split the headroom: first the milestones still open (faded, biggest first
+    // so a best-3 drop trims the smallest), then whatever is left is Bol d'Or
+    // points already won (e.g. qualifying) that the acquired bar doesn't yet
+    // count — shown solid.
     const seg = { fin: 0, h16: 0, h8: 0, q: 0 };
     for (const p of ['fin', 'h16', 'h8', 'q']) {
-      const take = Math.min(gain, LS_PART_MAX[p]);
+      const take = Math.min(gain, lsR4Open(row, p));
       seg[p] = take; gain -= take;
     }
-    return { row, acquired, ceiling, seg };
+    const won = Math.max(0, gain);
+    return { row, acquired, ceiling, seg, won };
   }).sort((a, b) => b.ceiling - a.ceiling || b.acquired - a.acquired);
 
   const labels = rows.map(r => {
@@ -2295,6 +2311,8 @@ function lsRenderChartInto(canvasId, wrapId, acquiredFn, key, filterFn, opts = {
       backgroundColor: baseColor.map(c => fade(c, 1)),
       borderWidth: 0,
     },
+    { label: 'Bol d\'Or won (Qual)', stack: 's', data: rows.map(r => r.won),
+      backgroundColor: baseColor.map(c => fade(c, 0.85)), borderColor: '#0d0d0d', borderWidth: 1 },
     { label: 'Bol d\'Or Qual (max)', stack: 's', data: rows.map(r => r.seg.q),
       backgroundColor: baseColor.map(c => fade(c, 0.15)), borderWidth: 0 },
     { label: 'Bol d\'Or 8h (max)', stack: 's', data: rows.map(r => r.seg.h8),

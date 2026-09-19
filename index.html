@@ -55,6 +55,23 @@
   .chart-card h3 { font-size: 12px; color: #90b4d6; margin-bottom: 10px; }
   .chart-wrap { position: relative; height: 340px; }
 
+  /* Time window slider under "Lap Times by Clock Time" */
+  .tw-bar { margin-top: 10px; user-select: none; }
+  .tw-track { position: relative; height: 34px; background: #161616; border: 1px solid #262626; border-radius: 6px; }
+  .tw-track .tw-mark { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed #90b4d6; }
+  .tw-track .tw-now { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; }
+  .tw-sel { position: absolute; top: 0; bottom: 0; background: rgba(59,130,246,.25); border: 2px solid #3b82f6; border-radius: 6px; box-sizing: border-box; display: flex; }
+  .tw-h { width: 14px; flex: 0 0 14px; background: #3b82f6; cursor: ew-resize; position: relative; }
+  .tw-h::after { content: ''; position: absolute; left: 5px; top: 9px; bottom: 9px; width: 2px; border-left: 1px solid #fff; border-right: 1px solid #fff; }
+  .tw-l { border-radius: 3px 0 0 3px; }
+  .tw-r { border-radius: 0 3px 3px 0; }
+  .tw-mid { flex: 1; cursor: grab; }
+  .tw-mid:active { cursor: grabbing; }
+  .tw-ticks { position: relative; height: 16px; font-size: 10px; color: #777; }
+  .tw-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .tw-info { display: flex; align-items: center; gap: 14px; font-size: 12px; color: #cbd5e1; margin-top: 4px; }
+  .tw-info #tw-label { font-family: monospace; font-weight: 700; }
+
   /* Team filter toggles */
   #team-filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
   #team-filter-bar label { font-size: 11px; color: #aaa; margin-right: 4px; }
@@ -342,6 +359,16 @@
       </span>
     </h3>
     <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes-time"></canvas></div>
+    <div class="tw-bar">
+      <div class="tw-track" id="tw-track">
+        <div class="tw-sel" id="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
+      </div>
+      <div class="tw-ticks" id="tw-ticks"></div>
+      <div class="tw-info"><span id="tw-label"></span>
+        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" id="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
+        <button class="team-toggle" onclick="twReset()">Reset 4 h</button>
+      </div>
+    </div>
   </div>
 
   <div class="chart-card">
@@ -1503,6 +1530,103 @@ function renderGapChart(active) {
 }
 
 // ── Lap times by clock time chart ───────────────────────────
+// ── Time window for "Lap Times by Clock Time" ──
+// A slider over the whole session (a race: 0–24 h) with two draggable ends
+// and a draggable middle. Default 4 h. With "Follow live" on and the session
+// running, the window rolls so it always shows 1 h 10 min ahead of now.
+const TW_KEY = 'tw_window_v1', TW_DEFAULT = 4 * 3600000, TW_AHEAD = 70 * 60000, TW_MIN = 10 * 60000;
+let twState = { from: 0, to: TW_DEFAULT, follow: true };   // offsets from the session start (ms)
+try { twState = { ...twState, ...(JSON.parse(localStorage.getItem(TW_KEY)) || {}) }; } catch (e) {}
+function twSave() { try { localStorage.setItem(TW_KEY, JSON.stringify(twState)); } catch (e) {} }
+// Session span: feed-now − elapsed → + elapsed + remaining (+5 min margin).
+function twSession() {
+  if (!rawData?.HeureJourUTC) return null;
+  const now = new Date(rawData.HeureJourUTC).getTime();
+  const start = now - (rawData.TempsEcoule || 0);
+  const span = (rawData.TempsEcoule || 0) + (rawData.TempsRestant || 0) + 5 * 60000;
+  return span > 0 ? { start, span, nowOff: now - start } : null;
+}
+function twClamp(sess) {
+  let w = Math.max(TW_MIN, Math.min(sess.span, twState.to - twState.from));
+  if (twState.follow && sess.nowOff > 0 && sess.nowOff < sess.span) {
+    twState.to = Math.min(sess.span, sess.nowOff + TW_AHEAD);
+    twState.from = twState.to - w;
+  }
+  twState.from = Math.max(0, Math.min(twState.from, sess.span - w));
+  twState.to = twState.from + w;
+}
+function twRange() {
+  const sess = twSession();
+  if (!sess) return null;
+  twClamp(sess);
+  twRenderBar(sess);
+  return { min: sess.start + twState.from, max: sess.start + twState.to };
+}
+function twFmtDur(ms) { const m = Math.round(ms / 60000); return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; }
+function twRenderBar(sess) {
+  const track = document.getElementById('tw-track'), sel = document.getElementById('tw-sel');
+  if (!track || !sel) return;
+  const pct = v => (v / sess.span * 100) + '%';
+  sel.style.left = pct(twState.from);
+  sel.style.width = pct(twState.to - twState.from);
+  // 8h/16h markers (24 h race only) and the "now" line.
+  track.querySelectorAll('.tw-mark,.tw-now').forEach(e => e.remove());
+  if (sess.span > 20 * 3600000) [8, 16].forEach(h => {
+    const m = document.createElement('div'); m.className = 'tw-mark'; m.style.left = pct(h * 3600000); track.appendChild(m);
+  });
+  if (sess.nowOff > 0 && sess.nowOff < sess.span) {
+    const n = document.createElement('div'); n.className = 'tw-now'; n.style.left = pct(sess.nowOff); n.title = 'now'; track.appendChild(n);
+  }
+  const hours = sess.span / 3600000, step = hours > 12 ? 2 : 1;
+  let ticks = '';
+  for (let h = 0; h <= hours; h += step) ticks += `<span style="left:${pct(h * 3600000)}">${h}h · ${eventClock(sess.start + h * 3600000)}</span>`;
+  document.getElementById('tw-ticks').innerHTML = ticks;
+  document.getElementById('tw-label').textContent =
+    `${eventClock(sess.start + twState.from)} – ${eventClock(sess.start + twState.to)}  (${twFmtDur(twState.to - twState.from)})`;
+  document.getElementById('tw-follow').checked = twState.follow;
+}
+function twApply() {
+  twSave();
+  const r = twRange();
+  if (r && lapTimesTimeChart) {
+    lapTimesTimeChart.options.scales.x.min = r.min;
+    lapTimesTimeChart.options.scales.x.max = r.max;
+    lapTimesTimeChart.update('none');
+  }
+}
+function twSetFollow(on) { twState.follow = on; twApply(); }
+function twReset() { twState = { from: 0, to: TW_DEFAULT, follow: true }; twApply(); }
+(function twWire() {
+  const track = document.getElementById('tw-track');
+  if (!track) return;
+  let drag = null, raf = 0;
+  track.addEventListener('pointerdown', e => {
+    const sess = twSession();
+    const kind = e.target.dataset?.drag;
+    if (!sess || !kind) return;
+    e.preventDefault();
+    track.setPointerCapture(e.pointerId);
+    drag = { kind, x0: e.clientX, from: twState.from, to: twState.to, span: sess.span, w: track.clientWidth };
+  });
+  track.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const d = (e.clientX - drag.x0) / drag.w * drag.span;
+    twState.follow = false;   // moving the window by hand stops the auto-roll
+    if (drag.kind === 'm') {
+      const w = drag.to - drag.from;
+      twState.from = Math.max(0, Math.min(drag.span - w, drag.from + d)); twState.to = twState.from + w;
+    } else if (drag.kind === 'l') {
+      twState.from = Math.max(0, Math.min(drag.to - TW_MIN, drag.from + d));
+    } else {
+      twState.to = Math.min(drag.span, Math.max(drag.from + TW_MIN, drag.to + d));
+    }
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; twApply(); });
+  });
+  const end = () => { if (drag) { drag = null; twApply(); } };
+  track.addEventListener('pointerup', end);
+  track.addEventListener('pointercancel', end);
+})();
+
 function renderLapTimesTimeChart(active) {
   const avgWindow = parseInt(document.getElementById('avg-window-slider-time')?.value) || 10;
   const datasets = [];
@@ -1559,14 +1683,8 @@ function renderLapTimesTimeChart(active) {
   // end (start + elapsed + remaining) plus a 5-minute margin. TempsEcoule +
   // TempsRestant is the session's full length (e.g. 2h practice, 24h race).
   let xMin, xMax;
-  if (rawData && rawData.HeureJourUTC) {
-    const nowMs = new Date(rawData.HeureJourUTC).getTime();
-    const elapsed = rawData.TempsEcoule || 0;
-    const remaining = rawData.TempsRestant || 0;
-    const startMs = nowMs - elapsed;
-    xMin = startMs;
-    xMax = startMs + elapsed + remaining + 5 * 60000;
-  }
+  const tw = twRange();
+  if (tw) { xMin = tw.min; xMax = tw.max; }
 
   // Pit stop dotted lines (like the top chart), positioned by clock time
   const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 30;

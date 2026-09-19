@@ -589,8 +589,12 @@
 // Timing feed. In Sept 2026 the provider moved to ewc.chronelec.com/results.php
 // (the old fimewc.live-frclassification.fr/r1.json now 404s). The new feed sends
 // no CORS headers and no public CORS proxy passes it, so the app reads it through
-// the relay in serve.py: run `python serve.py` and open http://localhost:3800.
-const API = '/feed/results.php';
+// the relay in serve.py (localhost) or the Cloudflare Worker (online).
+// Feed relay: serve.py on localhost; the Cloudflare Worker (cloudflare-worker.js)
+// everywhere else, e.g. GitHub Pages.
+const FEED_RELAY = 'https://ewc-feed.balintsmail.workers.dev';
+const IS_LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
+const API = IS_LOCAL ? '/feed/results.php' : `${FEED_RELAY}/feed/results.php`;
 const INTERVAL = 5000;
 
 // Convert the new results.php layout into the shape the rest of the app was

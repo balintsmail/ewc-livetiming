@@ -4300,7 +4300,12 @@ function liveSessionKey() {
   if (!rawData?.Titre || !rawData.HeureJourUTC) return null;
   const now = new Date(rawData.HeureJourUTC).getTime();
   const elapsed = rawData.TempsEcoule || 0;
-  const reset = lastElapsedMs !== null && elapsed < lastElapsedMs - 60000;
+  // A same-named session only restarts when the elapsed time goes back to
+  // near zero AND no laps came in over the last 10 minutes. A feed glitch
+  // (elapsed briefly lower mid-race) must not start a new session: that
+  // once wiped the race from memory at 17:25.
+  const lapsRecent = Object.values(teamData).some(td => td.laps.some(l => (l.tsMs || 0) > now - 10 * 60000));
+  const reset = lastElapsedMs !== null && elapsed < lastElapsedMs - 60000 && elapsed < 10 * 60000 && !lapsRecent;
   if (liveStartMs === null || liveStartTitle !== rawData.Titre || reset) {
     let start = Math.round((now - elapsed) / 300000) * 300000;
     // Page reloaded mid-session: if the session restored from storage has the

@@ -92,6 +92,58 @@
   #messages span { color: #fbbf24; margin-right: 6px; }
 
   /* ── Stints tab ── */
+  .pf-controls { margin-top: 10px; border-top: 1px solid #222; padding-top: 8px; font-size: 12px; }
+  .pf-global { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; color: #aaa; margin-bottom: 8px; }
+  .pf-global input { background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; padding: 2px 6px; width: 64px; }
+  .pf-row { display: grid; grid-template-columns: 14px 210px 170px 1fr 58px 64px 150px 64px; gap: 10px; align-items: center; padding: 3px 0; border-bottom: 1px solid #161616; }
+  .pf-head { font-size: 10px; color: #666; border-bottom: 1px solid #222; }
+  .pf-pace input.pf-set { color: #fbbf24; border-color: #7c5e10; }
+  .pf-row.pf-us .pf-name { color: #fbbf24; font-weight: 700; }
+  .pf-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; }
+  .pf-avg { color: #8a95a1; font-size: 11px; }
+  .pf-row input[type=range] { width: 100%; }
+  .pf-val { font-family: monospace; font-weight: 700; font-size: 13px; text-align: right; }
+  .pf-val.pf-set { color: #fbbf24; }
+  .pf-pace { display: inline-flex; align-items: center; gap: 5px; }
+  .pf-pace input[type=text] { font-family: monospace; text-align: center; width: 70px; background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; padding: 2px 4px; }
+  .pf-step { background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; width: 22px; height: 22px; cursor: pointer; font-weight: 700; line-height: 1; }
+  .pf-step:hover { border-color: #90b4d6; }
+  .pf-switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin-left: 6px; color: #aaa; }
+  .pf-switch input { display: none; }
+  .pf-slider { width: 30px; height: 16px; border-radius: 8px; background: #333; position: relative; transition: background .15s; }
+  .pf-slider::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #aaa; transition: left .15s; }
+  .pf-switch input:checked + .pf-slider { background: #16a34a; }
+  .pf-switch input:checked + .pf-slider::after { left: 16px; background: #fff; }
+
+  /* Stint breakdown: one column per top-8 team, one row per stint */
+  .sa-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .sa-col { background: #0d0d0d; border: 1px solid #222; border-top: 3px solid var(--c); border-radius: 6px; padding: 6px; min-width: 0; font-size: 11px; }
+  .sa-col.sa-us { background: #15130a; }
+  .sa-head { font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .sa-head span { color: #999; font-weight: 400; }
+  .sa-sum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #222; }
+  .sa-sum div { display: flex; flex-direction: column; min-width: 0; }
+  .sa-sum span { color: #777; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sa-sum b { font-family: monospace; font-size: 15px; letter-spacing: -0.5px; color: #e5e7eb; line-height: 1.2; white-space: nowrap; }
+  .sa-riders { margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #222; }
+  .sa-rider { padding: 2px 0; font-size: 10px; }
+  .sa-rider-n { display: flex; justify-content: space-between; color: #ddd; font-weight: 600; white-space: nowrap; overflow: hidden; }
+  .sa-rider-n span { color: #888; font-weight: 400; }
+  .sa-rider-t { display: flex; justify-content: space-between; color: #8a95a1; font-family: monospace; white-space: nowrap; }
+  .sa-stint { margin: 3px 0; }
+  .sa-lbl { display: flex; gap: 4px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
+  .sa-lbl b { color: #ddd; }
+  .sa-track { position: relative; height: 14px; background: #161616; border-radius: 2px; }
+  .sa-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; font: 700 10px monospace; color: #000; text-align: right; padding-right: 3px; line-height: 14px; }
+  .sa-plan { position: absolute; top: 0; bottom: 0; border: 1.5px dotted var(--c); border-left: none; border-radius: 0 2px 2px 0; font: 10px monospace; color: var(--c); text-align: right; padding-right: 3px; line-height: 11px; box-sizing: border-box; }
+  .sa-stint.sa-odd .sa-bar { background: #444 !important; color: #bbb; }
+  .sa-stint.sa-odd .sa-lbl::after { content: 'odd — not counted'; color: #f87171; margin-left: auto; }
+  .sa-stint.sa-active .sa-lbl b { color: var(--c); }
+  .pit-typ { float: right; font-size: 11px; color: #888; font-weight: 400; }
+  .pit-typ input { width: 52px; background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; padding: 1px 4px; }
+  .sa-stint.pit-est .sa-bar { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.35) 4px 8px); }
+  .sa-stint.pit-slow .sa-lbl::after { content: 'slow'; color: #fb923c; margin-left: auto; }
   .stint-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .stint-controls label { font-size: 12px; color: #aaa; }
   .stint-controls input[type=number] {
@@ -150,7 +202,16 @@
   #ls-table td.ls-sigma.ls-mismatch { color: #f87171; }
   #ls-table td.ls-static { font-family: monospace; font-weight: 700; color: #cbd5e1; background: #12161c; }
   #ls-table td.ls-champ { font-family: monospace; font-weight: 700; font-size: 14px; color: #fbbf24; background: #15130a; }
+  #ls-table td.ls-dropped { color: #555 !important; text-decoration: line-through; }
   .ls-grp-a { background: #16233a !important; }
+  .ls-pts-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .ls-pts-table th, .ls-pts-table td { border: 1px solid #222; padding: 3px 12px; text-align: right; min-width: 56px; }
+  .ls-pts-table thead th { background: #1a2533; color: #90b4d6; font-weight: 600; text-align: center; }
+  .ls-pts-table thead tr:first-child th { font-size: 11px; color: #cbd5e1; }
+  .ls-pts-table td.ls-pts-pos { color: #8a95a1; font-weight: 700; text-align: center; background: #101010; }
+  .ls-pts-table td.ls-pts-bdo { color: #fbbf24; font-weight: 700; background: #15130a; }
+  .ls-pts-table th.ls-pts-bdo { color: #fbbf24; }
+  .ls-pts-table td.ls-pts-empty { color: #333; }
   .ls-grp-b { background: #172030 !important; }
 
   /* Scenario: drag-to-order finishing list + recalculated chart */
@@ -173,6 +234,11 @@
   .ls-fin-pts { width: 22px; text-align: right; color: #4ade80; font-family: monospace; font-weight: 700; }
   .ls-fin-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
   .ls-fin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; }
+  .ls-ms-col { flex: 0 0 210px; width: 210px; display: flex; flex-direction: column; min-width: 0; }
+  .ls-ms-head { font-size: 11px; font-weight: 700; color: #90b4d6; text-align: center; padding: 2px 0 4px; }
+  .ls-ms-list { width: auto; flex: 1 1 auto; }
+  .ls-ms-list .ls-fin-row { gap: 5px; padding: 3px 4px; }
+  .ls-ms-list .ls-fin-pos { width: 24px; }
 
   /* ── Qualifying tab ── */
   .q-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 14px; }
@@ -334,17 +400,30 @@
 
 <!-- STINTS TAB -->
 <div id="tab-stints" class="panel">
+  <div class="chart-card">
+    <h3>Pit stop forecast — race 15:00 → 15:00 · <span style="color:#f87171">red</span> = red flag · <span style="color:#fde047">yellow</span> = safety car · solid line = pit stop made · dashed = forecast</h3>
+    <div class="q-filter" id="pf-filter"></div>
+    <div class="chart-wrap" id="pf-chart-wrap" style="height:320px"><canvas id="chart-pit-forecast"></canvas></div>
+    <div class="pf-controls">
+      <div class="pf-global">
+        <span>Pit stop loss <input type="number" id="pf-pitloss" min="0" max="600" step="5" value="70" onchange="pfSaveGlobals()"> s</span>
+        <span style="color:#666">Per team: stint laps (Auto = average full stint) and predicted average lap for the planned &amp; remaining stints (Auto = race pace so far, 1:57.0 before the team has laps). Moving a slider or −/+ switches that Auto off.</span>
+      </div>
+      <div id="pf-rows"></div>
+    </div>
+  </div>
+
   <div class="stint-controls">
     <label>Teams:</label>
     <div id="stint-team-filter-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
     <span style="margin-left:16px;color:#aaa;font-size:12px">Max stint:</span>
-    <input type="number" id="max-stint-input" value="27" min="1" max="200" onchange="renderStints()">
+    <input type="number" id="max-stint-input" value="30" min="1" max="200" onchange="renderStints(); renderPitForecast()">
     <span style="color:#aaa;font-size:12px">laps</span>
     <span id="longest-stint-label" style="font-size:11px;color:#555;margin-left:8px"></span>
   </div>
 
   <div class="chart-card">
-    <h3>Laps Remaining Until Pit</h3>
+    <h3>Active stints — laps done · dotted line = planned pit lap (the team's stint laps in the forecast)</h3>
     <div class="chart-wrap" style="height:220px"><canvas id="chart-stints"></canvas></div>
   </div>
 
@@ -367,7 +446,7 @@
   </div>
 
   <div class="chart-card">
-    <h3>SST Stint Analysis <span style="font-size:11px;color:#555;font-weight:400">— click a stint's lap count to exclude/include it from the prediction</span></h3>
+    <h3>SST Stint Analysis <span style="font-size:11px;color:#555;font-weight:400">— click a stint's lap count to exclude/include it from the prediction · stints under 20 laps are odd and never count</span></h3>
     <table id="sst-stint-table">
       <thead>
         <tr>
@@ -379,6 +458,23 @@
       </thead>
       <tbody id="sst-stint-table-body"></tbody>
     </table>
+  </div>
+
+  <div class="chart-card">
+    <h3>Stints — top 8 · one row per stint, bar = laps · ▶ = ongoing stint, dotted = laps left to its planned pit · grey = odd stint (&lt; 20 laps, not counted)</h3>
+    <div class="q-filter" id="tsel-sa"></div>
+    <div class="chart-wrap" style="height:560px;margin-bottom:12px"><canvas id="chart-sa-lines"></canvas></div>
+    <div class="sa-grid" id="sa-grid"></div>
+  </div>
+
+  <div class="chart-card">
+    <h3>Pit times — top 8 · pit time = in-lap last sector + out-lap first sector − typical S1 − typical last sector
+      <span class="pit-typ">typical S1 <input type="number" id="pit-typ-s1" step="0.1" value="34" onchange="pitSaveTypical()"> s
+        · typical last sector <input type="number" id="pit-typ-s3" step="0.1" value="52.5" onchange="pitSaveTypical()"> s</span>
+    </h3>
+    <div class="q-filter" id="tsel-pit"></div>
+    <div class="chart-wrap" style="height:560px;margin-bottom:12px"><canvas id="chart-pit-lines"></canvas></div>
+    <div class="sa-grid" id="pit-grid"></div>
   </div>
 </div>
 
@@ -418,8 +514,20 @@
   </div>
 
   <div class="chart-card" style="margin-bottom:18px">
-    <h3>Current total — acquired best 3 of 4 (solid) + max still available at Bol d'Or (faded)</h3>
-    <div class="chart-wrap" id="ls-chart-wrap" style="height:640px"><canvas id="ls-chart"></canvas></div>
+    <h3>Scenario per milestone — drag teams into the running order @8h, @16h and at the finish; championship recalculates →
+      <span id="ls-ms-status" style="float:right;font-size:12px;font-weight:600"></span>
+    </h3>
+    <div class="ls-scenario-row">
+      <div class="ls-ms-col"><div class="ls-ms-head">@8h</div><div id="ls-ms-h8" class="ls-finish-list ls-ms-list"></div></div>
+      <div class="ls-ms-col"><div class="ls-ms-head">@16h</div><div id="ls-ms-h16" class="ls-finish-list ls-ms-list"></div></div>
+      <div class="ls-ms-col"><div class="ls-ms-head">Finish</div><div id="ls-ms-fin" class="ls-finish-list ls-ms-list"></div></div>
+      <div class="chart-wrap" id="ls-chart-ms-wrap" style="flex:1;height:480px"><canvas id="ls-chart-ms"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:18px">
+    <h3>Points scales — EWC 2026 (reg 1.34) · columns used at the Bol d'Or are highlighted</h3>
+    <div class="q-wrap"><table class="ls-pts-table" id="ls-pts-table"></table></div>
   </div>
 
   <div class="ls-hint">
@@ -742,7 +850,7 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p =>
     p.classList.toggle('active', p.id === 'tab-' + name));
   if (name === 'charts') renderCharts();
-  if (name === 'stints') { buildStintFilterBar(); renderStints(); }
+  if (name === 'stints') { buildStintFilterBar(); renderStints(); renderPitForecast(); }
   if (name === 'livestanding') { qualiPtsAt = 0; renderLiveStanding(); } // fresh qualifying grid
   if (name === 'qualifying') renderQualifying();
 }
@@ -981,7 +1089,7 @@ function renderCharts() {
   });
 
   // ── Pit prediction vertical lines ──────────────────────────
-  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 30;
   const allAvgPaces = active.map(num => stintAvgPace(teamData[num].stints?.slice(-1)[0] || [])).filter(Boolean);
   const overallAvgPace = allAvgPaces.length ? allAvgPaces.reduce((a,b) => a+b,0) / allAvgPaces.length : 145;
   const oneHourLaps = Math.ceil(3600 / overallAvgPace);
@@ -1461,7 +1569,7 @@ function renderLapTimesTimeChart(active) {
   }
 
   // Pit stop dotted lines (like the top chart), positioned by clock time
-  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 30;
   const lapPitLabelsTime = [];
 
   active.forEach(num => {
@@ -1757,16 +1865,44 @@ function stintAvgPace(stint) {
 function renderStints() {
   const active = [...activeTeams].filter(n => teamData[n]);
   if (!active.length) return;
-  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 20;
+  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 30;
   const nowMs = rawData ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
 
+  // Active stint per team: laps done (solid, team colour, count inside the bar)
+  // and a dotted box to the team's planned stint end (its forecast stint laps).
   const labels  = active.map(n => `#${n}`);
   const done    = active.map(n => { const s = teamData[n].stints; return (s[s.length-1]||[]).length; });
-  const remaining = done.map(d => Math.max(0, maxStint - d));
-  const colors  = active.map(n => {
-    const pct = done[active.indexOf(n)] / maxStint;
-    return pct >= 0.85 ? '#ef4444cc' : pct >= 0.6 ? '#f59e0bcc' : colorForTeam(n) + 'cc';
-  });
+  const planned = active.map(n => pfStintLaps(n));
+  const colors  = active.map(n => colorForTeam(n));
+  const xMax = Math.max(...planned, ...done) + 1;
+
+  const stintDecor = {
+    id: 'stintDecor',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x } } = chart;
+      const bars = chart.getDatasetMeta(0).data;
+      ctx.save();
+      bars.forEach((bar, i) => {
+        const h = bar.height, top = bar.y - h / 2;
+        // Dotted line at the planned pit lap, with the target next to it.
+        const px = x.getPixelForValue(planned[i]);
+        ctx.strokeStyle = colors[i]; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(px, top - 2); ctx.lineTo(px, top + h + 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = colors[i]; ctx.font = '10px Segoe UI, Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(planned[i], px + 4, bar.y);
+        // Laps done, inside the bar on the right.
+        if (done[i] > 0) {
+          const n = parseInt(colors[i].slice(1), 16);
+          const light = ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114 > 150;
+          ctx.fillStyle = light ? '#000' : '#fff'; ctx.font = 'bold 11px Segoe UI, Arial';
+          ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+          ctx.fillText(done[i], bar.x - 4, bar.y);
+        }
+      });
+      ctx.restore();
+    }
+  };
 
   if (stintChart) stintChart.destroy();
   stintChart = new Chart(document.getElementById('chart-stints'), {
@@ -1775,18 +1911,19 @@ function renderStints() {
       labels,
       datasets: [
         { label: 'Laps done', data: done, backgroundColor: colors, borderRadius: 3 },
-        { label: 'Remaining', data: remaining, backgroundColor: '#1e1e1e', borderRadius: 3 },
       ]
     },
+    plugins: [stintDecor],
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 30 } },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ctx.datasetIndex===0 ? ` Done: ${ctx.parsed.x}` : ` Remaining: ${ctx.parsed.x}` } }
+        tooltip: { callbacks: { label: ctx => ` Done: ${done[ctx.dataIndex]} laps · planned ${planned[ctx.dataIndex]} · ${Math.max(0, planned[ctx.dataIndex] - done[ctx.dataIndex])} to go` } }
       },
       scales: {
-        x: { stacked: true, max: maxStint, ticks: { color: '#888', stepSize: 2 }, grid: { color: '#222' } },
-        y: { stacked: true, ticks: { color: '#ccc' }, grid: { color: '#1a1a1a' } }
+        x: { min: 0, max: xMax, ticks: { color: '#888', stepSize: 1, autoSkip: false }, grid: { color: '#222' } },
+        y: { ticks: { color: '#ccc' }, grid: { color: '#1a1a1a' } }
       }
     }
   });
@@ -1809,11 +1946,11 @@ function renderStints() {
     const remClass = pct >= 0.85 ? 'pit-soon' : pct >= 0.6 ? 'pit-mid' : 'pit-ok';
 
     const history = stints.slice(0,-1).map((s,i) =>
-      `<span style="color:#555">${i+1}:</span><b>${s.length}</b>`).join(' ');
+      `<span style="margin-right:6px">${i+1}:<b>${s.length}</b></span>`).join(' ');
 
     return `<tr>
       <td style="color:${col};font-weight:700">#${num} <span style="color:#666;font-weight:400;font-size:11px">${td.name.slice(0,18)}</span></td>
-      <td style="font-size:11px;color:#666">${history || '—'}</td>
+      <td style="font-size:13px;color:#fff;font-weight:700">${history || '—'}</td>
       <td style="text-align:center;font-weight:700;font-size:15px">${curLen}</td>
       <td class="${remClass}" style="text-align:center;font-size:15px">${lapsLeft}</td>
       <td style="text-align:right;font-family:monospace;color:#94a3b8">${avg ? secToStr(avg) : '—'}</td>
@@ -1829,16 +1966,18 @@ function renderStints() {
 const stintOverrides = {}; // { [num]: { [stintIndex]: true|false } } — explicit user overrides
 
 function stintCountThreshold() {
-  return parseInt(document.getElementById('max-stint-input')?.value) || 21;
+  return parseInt(document.getElementById('max-stint-input')?.value) || 30;
 }
 
 // A stint counts toward the prediction unless explicitly overridden, defaulting
 // to excluded when it's shorter than the max-stint threshold (likely an early/
 // unscheduled pit, not a representative full stint).
+const ODD_STINT_MIN = 20;   // a stint under 20 laps is odd (early/unplanned stop, crash, red flag)
 function isStintCounted(num, idx, len) {
+  if (len < ODD_STINT_MIN) return false;
   const override = stintOverrides[num]?.[idx];
   if (override !== undefined) return override;
-  return len >= stintCountThreshold();
+  return true;
 }
 
 function toggleStintCount(num, idx) {
@@ -1888,6 +2027,592 @@ function renderSstStintTable() {
       <td style="text-align:center;font-weight:700;font-size:15px">${prediction !== null ? prediction + ' laps' : '—'}</td>
       <td>${bar}</td>
     </tr>`;
+  }).join('');
+}
+
+// ── Pit stop forecast (race 15:00 → 15:00) ──────────────────────
+// One row per selected team. Pits already made come from the recorded stints;
+// from the team's last lap on, the next stops are projected every <stint laps>
+// laps at the team's race pace, plus the pit stop loss for each stop.
+const FLAG_SC = 7;                       // new feed: 7 = safety car (5 = FCY)
+const RACE_HOURS = 24;
+const PF_TEAMS_KEY = 'pf_teams_v1', PF_LAPS_KEY = 'pf_stint_laps_v1', PF_GLOBAL_KEY = 'pf_globals_v1';
+let pfTeams = new Set(DEFAULT_TEAMS);
+let pfLaps = {};                          // { num: laps } — only teams set by slider
+let pfChart = null;
+try { const t = JSON.parse(localStorage.getItem(PF_TEAMS_KEY)); if (Array.isArray(t)) pfTeams = new Set(t); } catch (e) {}
+try { pfLaps = JSON.parse(localStorage.getItem(PF_LAPS_KEY)) || {}; } catch (e) {}
+function pfSave() {
+  try { localStorage.setItem(PF_TEAMS_KEY, JSON.stringify([...pfTeams])); localStorage.setItem(PF_LAPS_KEY, JSON.stringify(pfLaps)); } catch (e) {}
+}
+function pfLoadGlobals() {
+  try {
+    const g = JSON.parse(localStorage.getItem(PF_GLOBAL_KEY)) || {};
+    if (g.pitloss != null) document.getElementById('pf-pitloss').value = g.pitloss;
+  } catch (e) {}
+}
+function pfSaveGlobals() {
+  try { localStorage.setItem(PF_GLOBAL_KEY, JSON.stringify({ pitloss: document.getElementById('pf-pitloss').value })); } catch (e) {}
+  renderPitForecast();
+}
+pfLoadGlobals();
+
+// Per-team predicted average lap. A value in pfPace = Auto switched off.
+const PF_PACE_KEY = 'pf_pace_v1', PF_DEFAULT_PACE = 117;   // 1:57.0 until a team has race laps
+let pfPace = {};
+try { pfPace = JSON.parse(localStorage.getItem(PF_PACE_KEY)) || {}; } catch (e) {}
+const pfFmtPace = sec => secToStr(sec).replace(/(\.\d)\d\d$/, '$1');   // m:ss.s
+function pfAutoPace(num, win) {
+  const laps = (teamData[num]?.laps || []).filter(l => (l.tsMs || 0) >= win.start && l.tsMs <= win.end);
+  return racePace(laps) || PF_DEFAULT_PACE;
+}
+function pfSavePace() { try { localStorage.setItem(PF_PACE_KEY, JSON.stringify(pfPace)); } catch (e) {} }
+function pfStepPace(num, d) {
+  pfPace[num] = +((pfPace[num] ?? pfAutoPace(num, pfRaceWindow())) + d).toFixed(3);
+  pfSavePace(); renderPitForecast();
+}
+function pfTypePace(num, el) {
+  const sec = parseTime(el.value);
+  if (sec) pfPace[num] = sec;
+  pfSavePace(); renderPitForecast();
+}
+function pfPaceAuto(num, on) {
+  if (on) delete pfPace[num]; else pfPace[num] = +pfAutoPace(num, pfRaceWindow()).toFixed(3);
+  pfSavePace(); renderPitForecast();
+}
+
+// Race window: the live race session's own start, else Saturday 15:00 local.
+function pfRaceWindow() {
+  const title = rawData?.Titre || '';
+  let start = Date.UTC(2026, 8, 19, 15, 0) - eventTzOffsetMin * 60000;
+  if (/race|course/i.test(title) && !/qualif|warm|practice|essai/i.test(title) && rawData.HeureJourUTC) {
+    start = Math.round((new Date(rawData.HeureJourUTC).getTime() - (rawData.TempsEcoule || 0)) / 60000) * 60000;
+  }
+  return { start, end: start + RACE_HOURS * 3600000 };
+}
+
+function pfAllNums() {
+  const nums = new Set(DEFAULT_TEAMS);
+  Object.keys(teamData).forEach(n => { if (!isTBike(n)) nums.add(n); });
+  return [...nums].sort(compareNums);
+}
+function pfSetMode(mode) {
+  if (mode === 'top8') pfTeams = new Set(DEFAULT_TEAMS);
+  else if (mode === 'all') pfTeams = new Set(pfAllNums());
+  else pfTeams = new Set();
+  pfSave(); renderPitForecast();
+}
+function pfToggle(num) { if (pfTeams.has(num)) pfTeams.delete(num); else pfTeams.add(num); pfSave(); renderPitForecast(); }
+function pfRenderFilter() {
+  const bar = document.getElementById('pf-filter');
+  if (!bar) return;
+  bar.innerHTML = `<button class="team-toggle" onclick="pfSetMode('top8')">Top 8</button>
+    <button class="team-toggle" onclick="pfSetMode('all')">All</button>
+    <button class="team-toggle" onclick="pfSetMode('none')">None</button><span class="sep"></span>` +
+    pfAllNums().map(n => {
+      const on = pfTeams.has(n), col = colorForTeam(n);
+      const style = on ? `border-color:${col};background:${col}22;color:${col}` : '';
+      const nm = (teamData[n]?.name || teamNameByNum[n] || '').replace(/"/g, '&quot;');
+      return `<button class="team-toggle${on ? ' on' : ''}" style="${style}" title="${nm}" onclick="pfToggle('${n}')">#${n}</button>`;
+    }).join('');
+}
+
+// Average of the team's full stints (same stints the SST Stint Analysis counts).
+function pfAvgStint(num) {
+  const stints = (teamData[num]?.stints || []).slice(0, -1);
+  const lens = stints.map((st, i) => ({ len: st.length, i })).filter(x => isStintCounted(num, x.i, x.len)).map(x => x.len);
+  return lens.length ? { avg: lens.reduce((a, b) => a + b, 0) / lens.length, n: lens.length } : null;
+}
+function pfStintLaps(num) {
+  if (pfLaps[num]) return pfLaps[num];
+  const a = pfAvgStint(num);
+  return a ? Math.round(a.avg) : stintCountThreshold();
+}
+
+// Race pace: average of the laps within 6% of the median lap, so in/out laps,
+// safety car and red flag laps drop out but a rain phase (whole field slower)
+// still counts.
+function racePace(laps) {
+  const t = laps.map(l => l.timeSec).filter(Boolean).sort((a, b) => a - b);
+  if (!t.length) return null;
+  const med = t[Math.floor(t.length / 2)];
+  const ok = t.filter(v => v <= med * 1.06);
+  return ok.reduce((a, b) => a + b, 0) / ok.length;
+}
+function pfForecast(num, win, nowMs) {
+  const td = teamData[num];
+  const laps = (td?.laps || []).filter(l => (l.tsMs || 0) >= win.start && l.tsMs <= win.end);
+  const pace = pfPace[num] ?? (racePace(laps) || PF_DEFAULT_PACE);
+  const loss = (parseFloat(document.getElementById('pf-pitloss')?.value) || 0) * 1000;
+  const L = pfStintLaps(num);
+  const past = [];
+  (td?.stints || []).slice(0, -1).forEach(st => {
+    const last = st[st.length - 1];
+    if (last?.tsMs >= win.start && last.tsMs <= win.end) past.push({ t: last.tsMs, lap: last.lap });
+  });
+  const fut = [];
+  let t, lap;
+  if (laps.length) {
+    const last = laps[laps.length - 1];
+    const cur = ((td.stints || [[]]).slice(-1)[0] || []).filter(l => (l.tsMs || 0) >= win.start).length;
+    const left = Math.max(0, L - cur);
+    t = Math.max(last.tsMs + left * pace * 1000, left ? 0 : nowMs);
+    lap = last.lap + left;
+  } else {
+    t = win.start + L * pace * 1000;
+    lap = L;
+  }
+  while (t < win.end) {
+    fut.push({ t, lap });
+    t += loss + L * pace * 1000;
+    lap += L;
+  }
+  // Stints: the ones done (a pit made), plus the current one, plus one after
+  // every forecast stop.
+  const done = past.length, planned = done + 1 + fut.length;
+  return { past, fut, pace, L, done, planned, left: planned - done };
+}
+
+function pfRenderRows(nums) {
+  const box = document.getElementById('pf-rows');
+  if (!box) return;
+  if (box.contains(document.activeElement) && ['range', 'text'].includes(document.activeElement.type)) return; // don't rebuild mid-drag/typing
+  const win = pfRaceWindow();
+  box.innerHTML = `<div class="pf-row pf-head"><span></span><span>Team</span><span>Average full stint</span><span>Stint laps</span><span></span>
+      <span>Auto</span><span>Predicted avg lap</span><span>Auto</span></div>` + nums.map(n => {
+    const col = colorForTeam(n), a = pfAvgStint(n), set = !!pfLaps[n];
+    const paceSet = pfPace[n] != null, pace = paceSet ? pfPace[n] : pfAutoPace(n, win);
+    const nm = teamData[n]?.name || teamNameByNum[n] || '';
+    const avgTxt = a ? `avg ${a.avg.toFixed(1)} laps (${a.n} stint${a.n > 1 ? 's' : ''})` : `no full stints yet · default ${stintCountThreshold()}`;
+    return `<div class="pf-row${baseNum(n) === DEFAULT_TEAMS[0] ? ' pf-us' : ''}">
+      <span class="pf-dot" style="background:${col}"></span>
+      <span class="pf-name" title="${nm.replace(/"/g, '&quot;')}"><b style="color:${col}">#${n}</b> ${nm}</span>
+      <span class="pf-avg">${avgTxt}</span>
+      <input type="range" min="10" max="40" step="1" value="${pfStintLaps(n)}" style="accent-color:${col}"
+        oninput="pfSetLaps('${n}', this.value)" onchange="pfSetLaps('${n}', this.value, true)">
+      <span class="pf-val${set ? ' pf-set' : ''}" id="pf-val-${n}">${pfStintLaps(n)} laps</span>
+      <label class="pf-switch" title="On: the team's average full stint"><input type="checkbox" ${set ? '' : 'checked'}
+        onchange="pfLapsAuto('${n}', this.checked)"><span class="pf-slider"></span></label>
+      <span class="pf-pace">
+        <button class="pf-step" onclick="pfStepPace('${n}', -0.5)" title="−0.5 s">−</button>
+        <input type="text" class="${paceSet ? 'pf-set' : ''}" value="${pfFmtPace(pace)}" onchange="pfTypePace('${n}', this)">
+        <button class="pf-step" onclick="pfStepPace('${n}', 0.5)" title="+0.5 s">+</button>
+      </span>
+      <label class="pf-switch" title="On: the team's race pace so far (1:57.0 before it has laps)"><input type="checkbox" ${paceSet ? '' : 'checked'}
+        onchange="pfPaceAuto('${n}', this.checked)"><span class="pf-slider"></span></label>
+    </div>`;
+  }).join('');
+}
+function pfSetLaps(num, v, done) {
+  pfLaps[num] = parseInt(v);
+  const el = document.getElementById(`pf-val-${num}`);
+  if (el) {
+    el.textContent = `${v} laps`; el.classList.add('pf-set');
+    const sw = el.nextElementSibling?.querySelector('input'); if (sw) sw.checked = false;
+  }
+  pfSave();
+  renderPitForecast(!done);
+}
+function pfLapsAuto(num, on) {
+  if (on) delete pfLaps[num]; else pfLaps[num] = pfStintLaps(num);
+  pfSave(); renderPitForecast();
+}
+
+function renderPitForecast(keepRows) {
+  const canvas = document.getElementById('chart-pit-forecast');
+  if (!canvas) return;
+  pfRenderFilter();
+  const nums = pfAllNums().filter(n => pfTeams.has(n));
+  if (!keepRows) pfRenderRows(nums);
+  const win = pfRaceWindow();
+  const nowMs = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+  const H = 3600000;
+  const fc = nums.map(n => pfForecast(n, win, nowMs));
+
+  const datasets = [];
+  nums.forEach((n, i) => {
+    const col = colorForTeam(n), f = fc[i];
+    // Points are invisible hover targets; the pit events are drawn as vertical
+    // lines filling the team's row (pfDecor).
+    datasets.push({ label: `#${n} made`, data: f.past.map(p => ({ x: p.t, y: i, lap: p.lap, kind: 'Pit stop' })),
+      borderColor: col, pointRadius: 0, pointHitRadius: 8, parsing: false, _num: n, _made: true });
+    datasets.push({ label: `#${n} forecast`, data: f.fut.map(p => ({ x: p.t, y: i, lap: p.lap, kind: 'Forecast pit' })),
+      borderColor: col, pointRadius: 0, pointHitRadius: 8, parsing: false, _num: n });
+  });
+
+  // Flag bands, 8h/16h markers, "now" line, pit clock labels.
+  const decor = {
+    id: 'pfDecor',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { x } } = chart;
+      ctx.save();
+      [[FLAG_RED, 'rgba(239,68,68,0.2)', 'RED FLAG', '#f87171'], [FLAG_SC, 'rgba(250,204,21,0.2)', 'SC', '#fde047']].forEach(([code, fill, txt, tc]) => {
+        flagPeriods(code).forEach(p => {
+          const x1 = Math.max(a.left, x.getPixelForValue(p.start)), x2 = Math.min(a.right, x.getPixelForValue(p.end));
+          if (x2 <= x1) return;
+          ctx.fillStyle = fill; ctx.fillRect(x1, a.top, x2 - x1, a.bottom - a.top);
+          ctx.fillStyle = tc; ctx.font = 'bold 9px Segoe UI, Arial'; ctx.textAlign = 'left';
+          ctx.fillText(txt, x1 + 2, a.bottom - 4);
+        });
+      });
+      [8, 16].forEach(h => {
+        const px = x.getPixelForValue(win.start + h * H);
+        ctx.strokeStyle = '#90b4d6'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+        ctx.setLineDash([]); ctx.fillStyle = '#90b4d6'; ctx.font = 'bold 11px Segoe UI, Arial'; ctx.textAlign = 'center';
+        ctx.fillText(`${h}h`, px, a.top - 4);
+      });
+      if (nowMs > win.start && nowMs < win.end) {
+        const px = x.getPixelForValue(nowMs);
+        ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = '10px Segoe UI, Arial'; ctx.textAlign = 'center';
+        ctx.fillText('now', px, a.top - 4);
+      }
+      ctx.restore();
+    },
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { x, y } } = chart;
+      ctx.save();
+      // Row separators: each team's band runs from row-0.5 to row+0.5.
+      ctx.strokeStyle = '#262626'; ctx.lineWidth = 1;
+      for (let i = 0; i <= nums.length; i++) {
+        const py = Math.round(y.getPixelForValue(i - 0.5)) + 0.5;
+        ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+      }
+      // Stint count columns to the right of the plot.
+      const colX = [a.right + 42, a.right + 102, a.right + 158];
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = 'bold 10px Segoe UI, Arial'; ctx.fillStyle = '#90b4d6';
+      ['Stints done', 'Planned', 'Left'].forEach((h, k) => ctx.fillText(h, colX[k], a.top - 4));
+      ctx.textBaseline = 'middle'; ctx.font = 'bold 13px monospace';
+      fc.forEach((f, i) => {
+        const py = y.getPixelForValue(i);
+        [[f.done, '#cbd5e1'], [f.planned, '#e5e7eb'], [f.left, '#fbbf24']].forEach(([v, c], k) => {
+          ctx.fillStyle = c; ctx.fillText(String(v), colX[k], py);
+        });
+      });
+      ctx.font = '9px Segoe UI, Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      chart.data.datasets.forEach(ds => {
+        if (!ds._num) return;
+        ds.data.forEach(d => {
+          const px = x.getPixelForValue(d.x);
+          if (px < a.left || px > a.right) return;
+          const top = y.getPixelForValue(d.y - 0.5) + 2, bot = y.getPixelForValue(d.y + 0.5) - 2;
+          ctx.strokeStyle = ds.borderColor; ctx.lineWidth = ds._made ? 3 : 2;
+          ctx.setLineDash(ds._made ? [] : [4, 3]);
+          ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bot); ctx.stroke();
+          ctx.fillStyle = ds._made ? ds.borderColor : '#8a95a1';
+          ctx.fillText(eventClock(d.x), px + 3, (top + bot) / 2);
+        });
+      });
+      ctx.restore();
+    },
+  };
+
+  const wrap = document.getElementById('pf-chart-wrap');
+  if (wrap) wrap.style.height = Math.max(160, nums.length * 42 + 70) + 'px';
+  if (pfChart) pfChart.destroy();
+  pfChart = new Chart(canvas, {
+    type: 'scatter',
+    data: { datasets },
+    plugins: [decor],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+      layout: { padding: { top: 16, right: 190 } },
+      scales: {
+        x: { type: 'linear', min: win.start, max: win.end,
+             afterBuildTicks: sc => { sc.ticks = []; for (let t = win.start; t <= win.end; t += H) sc.ticks.push({ value: t }); },
+             ticks: { color: '#888', maxRotation: 0, autoSkip: false, callback: v => eventClock(v) },
+             grid: { color: '#1c1c1c' } },
+        y: { type: 'linear', min: -0.5, max: Math.max(0.5, nums.length - 0.5), reverse: true,
+             afterBuildTicks: sc => { sc.ticks = nums.map((_, i) => ({ value: i })); },
+             ticks: { color: '#cbd5e1', font: { size: 11, weight: 'bold' }, callback: v => nums[v] ? `#${nums[v]}` : '' },
+             grid: { display: false } },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => { const n = items[0].dataset._num; return `#${n} ${teamData[n]?.name || teamNameByNum[n] || ''}`; },
+            label: ctx => {
+              const d = ctx.raw, h = (d.x - win.start) / H;
+              return ` ${d.kind} ${eventClock(d.x)} · race ${Math.floor(h)}h${String(Math.floor((h % 1) * 60)).padStart(2, '0')} · lap ~${d.lap}`;
+            },
+            afterBody: items => { const f = fc[nums.indexOf(items[0].dataset._num)]; return f ? `Stint ${f.L} laps · pace ${secToStr(f.pace)} · stints ${f.done} done / ${f.planned} planned / ${f.left} left` : ''; },
+          }
+        }
+      }
+    }
+  });
+  renderStintGrid(win, nowMs);
+  renderPitGrid(win);
+}
+
+// ── Pit times ──
+// Pit time = in-lap last sector + out-lap first sector (the part of the two
+// laps spent in the pit lane) minus what those two sectors take at racing
+// speed. Saved on the team record (td.pits), so it's stored with the session.
+// No sectors for a stop → estimated from the full in + out laps minus two
+// race-pace laps (marked "est.").
+const PIT_TYP_KEY = 'pit_typical_v1';
+let pitTypical = { s1: 34, s3: 52.5 };
+try { pitTypical = { ...pitTypical, ...(JSON.parse(localStorage.getItem(PIT_TYP_KEY)) || {}) }; } catch (e) {}
+function pitLoadTypical() {
+  const a = document.getElementById('pit-typ-s1'), b = document.getElementById('pit-typ-s3');
+  if (a) a.value = pitTypical.s1;
+  if (b) b.value = pitTypical.s3;
+}
+function pitSaveTypical() {
+  pitTypical = { s1: parseFloat(document.getElementById('pit-typ-s1').value) || 34,
+                 s3: parseFloat(document.getElementById('pit-typ-s3').value) || 52.5 };
+  try { localStorage.setItem(PIT_TYP_KEY, JSON.stringify(pitTypical)); } catch (e) {}
+  renderPitForecast();
+}
+pitLoadTypical();
+
+function computePits(num, win) {
+  const td = teamData[num];
+  if (!td) return [];
+  const inWin = l => !win || ((l.tsMs || 0) >= win.start && l.tsMs <= win.end);
+  const stints = (td.stints || []).map(st => st.filter(inWin));
+  const pace = racePace(stints.flat());
+  const pits = [];
+  for (let i = 0; i < stints.length - 1; i++) {
+    const a = stints[i], b = stints[i + 1];
+    if (!a.length || !b.length) continue;
+    const inL = a[a.length - 1], outL = b[0];
+    let base = null, time = null, est = false;
+    if (inL.s3 != null && outL.s1 != null) {
+      base = inL.s3 + outL.s1;
+      time = base - pitTypical.s1 - pitTypical.s3;
+    } else if (inL.timeSec && outL.timeSec && pace) {
+      time = inL.timeSec + outL.timeSec - 2 * pace;
+      est = true;
+    }
+    pits.push({ n: pits.length + 1, inLap: inL.lap, outLap: outL.lap, inS3: inL.s3 ?? null, outS1: outL.s1 ?? null,
+                base, time: time != null ? +time.toFixed(3) : null, est,
+                riderIn: inL.rider || '', riderOut: outL.rider || '', tsMs: inL.tsMs || null });
+  }
+  td.pits = pits;
+  return pits;
+}
+
+function renderPitGrid(win) {
+  renderPitLines(win);
+  const box = document.getElementById('pit-grid');
+  if (!box) return;
+  box.innerHTML = DEFAULT_TEAMS.map(num => {
+    const col = colorForTeam(num), td = teamData[num];
+    const pits = computePits(num, win);
+    const times = pits.map(p => p.time).filter(t => t != null);
+    const avg = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
+    const scale = Math.max(90, ...times.map(t => t + 5));
+    const f1 = v => v == null ? '—' : v.toFixed(1) + ' s';
+    const rows = pits.map(p => {
+      const w = p.time != null ? Math.max(0, p.time) / scale * 100 : 0;
+      const slow = avg != null && p.time != null && times.length > 2 && p.time > avg + 5;
+      const sur = n => saShortName(n).replace(/\s\S\.$/, '');   // "KOVÁCS B." → "KOVÁCS"
+      const change = p.riderIn && p.riderOut && p.riderIn !== p.riderOut
+        ? `${sur(p.riderIn)} → ${sur(p.riderOut)}` : sur(p.riderOut || p.riderIn);
+      const how = p.base != null
+        ? `In-lap last sector ${p.inS3.toFixed(3)} + out-lap S1 ${p.outS1.toFixed(3)} = ${p.base.toFixed(3)} − ${pitTypical.s1} − ${pitTypical.s3}`
+        : 'No sectors: in-lap + out-lap − 2 × race pace (estimate)';
+      return `<div class="sa-stint${p.est ? ' pit-est' : ''}${slow ? ' pit-slow' : ''}" title="${saOrdinal(p.n)} pit stop · laps ${p.inLap}→${p.outLap} · ${change}
+${how} = ${f1(p.time)}">
+        <div class="sa-lbl"><b>${saOrdinal(p.n)}</b> L${p.inLap} · ${change}</div>
+        <div class="sa-track"><div class="sa-bar" style="width:${w.toFixed(1)}%;background:${col}">${p.time != null ? p.time.toFixed(1) : '?'}${p.est ? '*' : ''}</div></div>
+      </div>`;
+    }).join('');
+    const nm = td?.name || teamNameByNum[num] || '';
+    return `<div class="sa-col${num === DEFAULT_TEAMS[0] ? ' sa-us' : ''}" style="--c:${col}">
+      <div class="sa-head" title="${nm}">#${num} <span>${nm}</span></div>
+      <div class="sa-sum">
+        <div><span>Pit stops</span><b>${pits.length}</b></div>
+        <div><span>Avg pit time</span><b>${f1(avg)}</b></div>
+        <div><span>Best pit time</span><b>${f1(times.length ? Math.min(...times) : null)}</b></div>
+        <div><span>Total pit time</span><b>${f1(times.length ? times.reduce((a, b) => a + b, 0) : null)}</b></div>
+      </div>
+      <div class="sa-stints">${rows || '<div style="color:#555">No pit stops yet</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Stint breakdown per top-8 team: summary + one bar per stint ──
+// Stint → rider is the rider who drove most of its laps (every recorded lap
+// carries the rider, so this is saved with the session's laps).
+function saOrdinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function saRiderOf(stint) {
+  const c = {};
+  stint.forEach(l => { if (l.rider) c[l.rider] = (c[l.rider] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+}
+function saBest(laps) { const t = laps.map(l => l.timeSec).filter(Boolean); return t.length ? Math.min(...t) : null; }
+function saFmt(sec) { return sec ? secToStr(sec) : '—'; }
+function saShortName(name) {
+  // Feed style "SURNAME Firstname" → "SURNAME F."
+  const m = /^([A-ZÀ-Ý' -]{2,}?)\s+([A-Za-zÀ-ÿ].*)$/.exec(name || '');
+  return m ? `${m[1]} ${m[2][0]}.` : (name || '—');
+}
+// A team's race stints: laps, rider, length, ongoing / odd flags.
+function saStintRows(num, win, nowMs) {
+  const inWin = l => (l.tsMs || 0) >= win.start && l.tsMs <= win.end;
+  const running = nowMs > win.start && nowMs < win.end;
+  const all = teamData[num]?.stints || [];
+  const rows = [];
+  all.forEach((st, idx) => {
+    const laps = st.filter(inWin);
+    const active = running && idx === all.length - 1;
+    if (!laps.length && !(active && rows.length)) return;
+    rows.push({ laps, active, len: laps.length, rider: laps.length ? saRiderOf(laps) : saRiderOf(all[idx - 1] || []),
+                odd: !active && !isStintCounted(num, idx, laps.length) });
+  });
+  return rows;
+}
+
+// ── Team selectors for the stint / pit-time line charts (top 8 by default) ──
+const TSEL_KEY = 'tsel_v1';
+const tsel = { sa: new Set(DEFAULT_TEAMS), pit: new Set(DEFAULT_TEAMS) };
+try { const t = JSON.parse(localStorage.getItem(TSEL_KEY)) || {}; Object.keys(tsel).forEach(k => { if (Array.isArray(t[k])) tsel[k] = new Set(t[k]); }); } catch (e) {}
+function tselSave() { try { localStorage.setItem(TSEL_KEY, JSON.stringify(Object.fromEntries(Object.entries(tsel).map(([k, v]) => [k, [...v]])))); } catch (e) {} }
+function tselMode(key, mode) {
+  tsel[key] = mode === 'top8' ? new Set(DEFAULT_TEAMS) : mode === 'all' ? new Set(pfAllNums()) : new Set();
+  tselSave(); renderPitForecast();
+}
+function tselToggle(key, num) { const t = tsel[key]; if (t.has(num)) t.delete(num); else t.add(num); tselSave(); renderPitForecast(); }
+function tselRender(key) {
+  const bar = document.getElementById('tsel-' + key);
+  if (!bar) return;
+  bar.innerHTML = `<button class="team-toggle" onclick="tselMode('${key}','top8')">Top 8</button>
+    <button class="team-toggle" onclick="tselMode('${key}','all')">All</button>
+    <button class="team-toggle" onclick="tselMode('${key}','none')">None</button><span class="sep"></span>` +
+    pfAllNums().map(n => {
+      const on = tsel[key].has(n), col = colorForTeam(n);
+      const style = on ? `border-color:${col};background:${col}22;color:${col}` : '';
+      const nm = (teamData[n]?.name || teamNameByNum[n] || '').replace(/"/g, '&quot;');
+      return `<button class="team-toggle${on ? ' on' : ''}" style="${style}" title="${nm}" onclick="tselToggle('${key}','${n}')">#${n}</button>`;
+    }).join('');
+}
+
+// Value written next to every dot of a line chart (dataset._fmt formats it).
+const pointValueLabels = {
+  id: 'pointValueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save(); ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((pt, k) => {
+        const d = ds.data[k];
+        if (d?.y == null) return;
+        ctx.fillStyle = ds.borderColor;
+        ctx.fillText(ds._fmt ? ds._fmt(d) : d.y, pt.x, pt.y - 6);
+      });
+    });
+    ctx.restore();
+  }
+};
+const lineCharts = {};
+function drawTeamLines(key, canvasId, nums, seriesOf, opts) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const datasets = nums.map(n => {
+    const col = colorForTeam(n), pts = seriesOf(n);
+    return { label: `#${n}`, data: pts, borderColor: col, backgroundColor: pts.map(p => p.hollow ? '#111' : (p.grey ? '#555' : col)),
+             pointBorderColor: pts.map(p => p.grey ? '#555' : col), pointRadius: 4, pointHoverRadius: 6, borderWidth: 2, tension: 0,
+             parsing: false, _num: n, _fmt: opts.fmt,
+             segment: { borderDash: c => pts[c.p1DataIndex]?.hollow ? [4, 4] : undefined } };
+  }).filter(d => d.data.length);
+  const maxX = Math.max(1, ...datasets.flatMap(d => d.data.map(p => p.x)));
+  if (lineCharts[key]) lineCharts[key].destroy();
+  lineCharts[key] = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    plugins: [pointValueLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+      layout: { padding: { top: 14, right: 10 } },
+      interaction: { mode: 'nearest', intersect: true },
+      scales: {
+        x: { type: 'linear', min: 0.7, max: maxX + 0.3, ticks: { stepSize: 1, color: '#888', callback: v => Number.isInteger(v) ? saOrdinal(v) : '' },
+             title: { display: true, text: opts.xTitle, color: '#666' }, grid: { color: '#1c1c1c' } },
+        y: { ticks: { color: '#888' }, title: { display: true, text: opts.yTitle, color: '#666' }, grid: { color: '#1c1c1c' }, grace: '8%' },
+      },
+      plugins: {
+        legend: { labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
+        tooltip: { callbacks: {
+          title: items => { const n = items[0].dataset._num; return `#${n} ${teamData[n]?.name || teamNameByNum[n] || ''}`; },
+          label: c => c.raw.info,
+        } },
+      },
+    },
+  });
+}
+
+function renderStintLines(win, nowMs) {
+  tselRender('sa');
+  const nums = pfAllNums().filter(n => tsel.sa.has(n));
+  drawTeamLines('sa', 'chart-sa-lines', nums, n => {
+    const f = pfForecast(n, win, nowMs);
+    // A stint that has only just started (0 laps) isn't worth a point.
+    return saStintRows(n, win, nowMs).map((r, i) => r.len ? ({
+      x: i + 1, y: r.len, hollow: r.active, grey: r.odd,
+      info: `${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.L})` : ''}${r.odd ? ' · odd, not counted' : ''}`
+        + ` · laps ${r.laps[0]?.lap ?? '—'}–${r.laps[r.laps.length - 1]?.lap ?? '—'} · avg ${saFmt(racePace(r.laps))} · best ${saFmt(saBest(r.laps))}`,
+    }) : null).filter(Boolean);
+  }, { xTitle: 'Stint', yTitle: 'Laps', fmt: d => d.hollow ? `${d.y}▶` : d.y });
+}
+function renderPitLines(win) {
+  tselRender('pit');
+  const nums = pfAllNums().filter(n => tsel.pit.has(n));
+  drawTeamLines('pit', 'chart-pit-lines', nums, n => computePits(n, win).filter(p => p.time != null).map(p => ({
+    x: p.n, y: p.time, hollow: false, grey: p.est,
+    info: `${saOrdinal(p.n)} pit stop · laps ${p.inLap}→${p.outLap} · ${p.riderIn || '—'} → ${p.riderOut || '—'} · ${p.time.toFixed(1)} s`
+      + (p.base != null ? ` (in-lap last sector ${p.inS3.toFixed(3)} + out-lap S1 ${p.outS1.toFixed(3)} − ${pitTypical.s1} − ${pitTypical.s3})` : ' (estimate, no sectors)'),
+  })), { xTitle: 'Pit stop', yTitle: 'Pit time (s)', fmt: d => d.y.toFixed(1) });
+}
+
+function renderStintGrid(win, nowMs) {
+  renderStintLines(win, nowMs);
+  const box = document.getElementById('sa-grid');
+  if (!box) return;
+  box.innerHTML = DEFAULT_TEAMS.map(num => {
+    const td = teamData[num], col = colorForTeam(num);
+    const f = pfForecast(num, win, nowMs);
+    const rows = saStintRows(num, win, nowMs);
+    // Before the race (or a team with no data): nothing to list yet.
+    const raceLaps = rows.flatMap(r => r.laps);
+    const riders = {};
+    rows.forEach(r => {
+      const k = r.rider;
+      (riders[k] = riders[k] || { stints: 0, laps: [] }).stints++;
+      riders[k].laps.push(...r.laps);
+    });
+    const scale = Math.max(32, ...rows.map(r => r.len), f.L + 2);
+    const pct = v => (v / scale * 100).toFixed(1) + '%';
+    const stintRows = rows.map((r, i) => {
+      const plan = r.active && f.L > r.len
+        ? `<div class="sa-plan" style="left:${pct(r.len)};width:${pct(f.L - r.len)}">${f.L}</div>` : '';
+      return `<div class="sa-stint${r.odd ? ' sa-odd' : ''}${r.active ? ' sa-active' : ''}" title="${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.L})` : ''} · avg ${saFmt(racePace(r.laps))} · best ${saFmt(saBest(r.laps))}">
+        <div class="sa-lbl"><b>${r.active ? '▶ ' : ''}${saOrdinal(i + 1)}</b> ${saShortName(r.rider)}</div>
+        <div class="sa-track"><div class="sa-bar" style="width:${pct(r.len)};background:${col}">${r.len}</div>${plan}</div>
+      </div>`;
+    }).join('');
+    const riderRows = Object.entries(riders).map(([name, v]) =>
+      `<div class="sa-rider" title="${name}"><div class="sa-rider-n">${saShortName(name)} <span>${v.stints} stint${v.stints > 1 ? 's' : ''}</span></div>
+        <div class="sa-rider-t"><span title="Average pace">Ø ${saFmt(racePace(v.laps)).slice(0, -1)}</span><span title="Best lap">best ${saFmt(saBest(v.laps))}</span></div></div>`).join('');
+    const nm = td?.name || teamNameByNum[num] || '';
+    return `<div class="sa-col${num === DEFAULT_TEAMS[0] ? ' sa-us' : ''}" style="--c:${col}">
+      <div class="sa-head" title="${nm}">#${num} <span>${nm}</span></div>
+      <div class="sa-sum">
+        <div><span>Total stints</span><b>${rows.length}</b></div>
+        <div><span title="Predicted stints left">Stints left</span><b style="color:#fbbf24">${f.left}</b></div>
+        <div><span>Avg team pace</span><b>${saFmt(racePace(raceLaps))}</b></div>
+        <div><span>Best lap</span><b>${saFmt(saBest(raceLaps))}</b></div>
+      </div>
+      ${riderRows ? `<div class="sa-riders">${riderRows}</div>` : ''}
+      <div class="sa-stints">${stintRows || '<div style="color:#555">No race stints yet</div>'}</div>
+    </div>`;
   }).join('');
 }
 
@@ -2009,7 +2734,7 @@ function lsColor(row) { return LS_TEAM_COLOR[row.team] || LS_MANUF_COLOR[row.man
 
 // User-entered per-part breakdown: lsData[team][roundKey][part] = number|''.
 let lsData = {};
-const lsCharts = { top: null, full: null, scenario: null };
+const lsCharts = { top: null, full: null, scenario: null, ms: null };
 
 function lsId(team) { return team.replace(/[^a-zA-Z0-9]/g, '_'); }
 function lsOfficial(row, rkey) { return rkey === 'R4' ? null : (row[rkey] ?? 0); }
@@ -2092,6 +2817,28 @@ function lsChampTotal(row) {
   const totals = LS_ROUNDS.map(r => lsRoundTotal(row, r.key));
   return totals.slice().sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
 }
+// The round that does NOT count (lowest total; on a tie the older round is dropped).
+function lsDroppedRound(row) {
+  let drop = null, low = Infinity;
+  LS_ROUNDS.forEach(r => { const t = lsRoundTotal(row, r.key); if (t < low) { low = t; drop = r.key; } });
+  return drop;
+}
+function lsChampTitle(row) {
+  const d = lsDroppedRound(row);
+  const kept = LS_ROUNDS.filter(r => r.key !== d).map(r => `${r.name} ${lsRoundTotal(row, r.key)}`).join(' + ');
+  const dr = LS_ROUNDS.find(r => r.key === d);
+  return `Best 3 of 4: ${kept} = ${lsChampTotal(row)}  (dropped: ${dr.name} ${lsRoundTotal(row, d)})`;
+}
+// Grey out + strike the dropped round's cell so the best-3 rule is visible.
+function lsMarkDropped(row) {
+  const id = lsId(row.team), d = lsDroppedRound(row);
+  LS_ROUNDS.forEach(r => {
+    const el = document.getElementById(`ls-rd-${id}-${r.key}`);
+    if (el) { el.classList.toggle('ls-dropped', r.key === d); el.title = r.key === d ? 'Dropped — only the best 3 rounds count (reg 1.34)' : ''; }
+  });
+  const champEl = document.getElementById(`ls-champ-${id}`);
+  if (champEl) champEl.title = lsChampTitle(row);
+}
 // Max reachable championship total if the team maxes out Bol d'Or (65 pts).
 // Still open at Bol d'Or, per milestone: 0 once decided (a typed value, or
 // qualifying once the grid is final), otherwise the milestone's maximum.
@@ -2129,7 +2876,7 @@ function lsRenderHead() {
       r1 += `<th class="ls-grp ${cls}" rowspan="2">${r.name}<small>${r.loc} · ${r.dur}</small></th>`;
     }
   });
-  r1 += `<th class="ls-champ" rowspan="2">Champ</th></tr>`;
+  r1 += `<th class="ls-champ" rowspan="2" title="Best 3 of the 4 rounds (reg 1.34) — the struck-through round is dropped">Champ<small>best 3 of 4</small></th></tr>`;
   r2 += `</tr>`;
   head.innerHTML = r1 + r2;
 }
@@ -2147,7 +2894,7 @@ function lsRenderBody() {
       const cls = i % 2 === 0 ? 'ls-grp-a' : 'ls-grp-b';
       if (r.key !== 'R4') {
         // Settled race → single static points cell.
-        cells += `<td class="ls-static">${row[r.key] ?? 0}</td>`;
+        cells += `<td class="ls-static" id="ls-rd-${id}-${r.key}">${row[r.key] ?? 0}</td>`;
         return;
       }
       // Bol d'Or → editable milestone inputs + live Σ.
@@ -2160,7 +2907,7 @@ function lsRenderBody() {
           value="${v}" placeholder="${ph || ''}" title="${p === 'q' && ph ? 'Qualifying grid points (final result)' : ''}"
           oninput="lsEdit(this)"></td>`;
       });
-      cells += `<td class="ls-sigma" id="ls-sig-${id}-R4">${lsRoundTotal(row, 'R4')}</td>`;
+      cells += `<td class="ls-sigma" id="ls-rd-${id}-R4">${lsRoundTotal(row, 'R4')}</td>`;
     });
     return `<tr class="${us ? 'ls-us' : ''}">
       <td class="ls-team">${row.team}<small>${row.manuf}</small></td>
@@ -2169,6 +2916,7 @@ function lsRenderBody() {
       <td class="ls-champ" id="ls-champ-${id}">${champ}</td>
     </tr>`;
   }).join('');
+  LS_SEED.forEach(lsMarkDropped);
 }
 function lsOfficialSum(row) { return (row.R1 || 0) + (row.R2 || 0) + (row.R3 || 0); }
 
@@ -2177,10 +2925,11 @@ function lsUpdateRow(team) {
   const row = LS_SEED.find(r => r.team === team);
   if (!row) return;
   const id = lsId(team);
-  const sig = document.getElementById(`ls-sig-${id}-R4`);
+  const sig = document.getElementById(`ls-rd-${id}-R4`);
   if (sig) sig.textContent = lsRoundTotal(row, 'R4');
   const champEl = document.getElementById(`ls-champ-${id}`);
   if (champEl) champEl.textContent = lsChampTotal(row);
+  lsMarkDropped(row);
 }
 
 function lsEdit(el) {
@@ -2212,7 +2961,6 @@ function lsRoundTotalsAll(row) { return LS_ROUNDS.map(r => lsRoundTotal(row, r.k
 function lsBestN(row, n) {
   return lsRoundTotalsAll(row).slice().sort((a, b) => b - a).slice(0, n).reduce((a, b) => a + b, 0);
 }
-function lsAcquiredFull(row)      { return lsBestN(row, 3); }
 function lsAcquiredDropWorst(row) { return lsBestN(row, 2); }
 
 // Our guaranteed championship floor: best 3 of our completed rounds, treating
@@ -2363,8 +3111,6 @@ function lsRenderCharts() {
   if (lsInRaceMode) lsRenderTopInRace();
   else lsRenderChartInto('ls-chart-top', 'ls-chart-top-wrap', lsAcquiredDropWorst, 'top', lsCanBeatUs,
     { heightScale: 1.5, labels: true });
-  // Bottom: full current total, entire field.
-  lsRenderChartInto('ls-chart', 'ls-chart-wrap', lsAcquiredFull, 'full', null, {});
 }
 
 // ── In-race projection ────────────────────────────────────────
@@ -2505,9 +3251,41 @@ function lsRenderTopInRace() {
 const LS_QUAL_PTS    = [5, 4, 3, 2, 1];
 const LS_PARTIAL_PTS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 const LS_FINISH_PTS  = [40, 33, 28, 24, 21, 19, 17, 15, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+const LS_FINISH_8H_PTS  = [30, 24, 21, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+const LS_FINISH_12H_PTS = [35, 29, 25, 21, 18, 16, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+// Reference table of every points scale (race by duration, 8h/16h extras, qualifying).
+function lsRenderPtsTable() {
+  const t = document.getElementById('ls-pts-table');
+  if (!t) return;
+  const cols = [
+    { grp: 'Race',               name: '8H',          pts: LS_FINISH_8H_PTS },
+    { grp: 'Race',               name: '8H < … ≤ 12H', pts: LS_FINISH_12H_PTS },
+    { grp: 'Race',               name: '24H',         pts: LS_FINISH_PTS,  bdo: true },
+    { grp: 'Race extra points',  name: 'After 8H',    pts: LS_PARTIAL_PTS, bdo: true },
+    { grp: 'Race extra points',  name: 'After 16H',   pts: LS_PARTIAL_PTS, bdo: true },
+    { grp: 'Qualifying',         name: 'Q',           pts: LS_QUAL_PTS,    bdo: true },
+  ];
+  const groups = [];
+  cols.forEach(c => { const g = groups[groups.length - 1]; if (g && g.name === c.grp) g.span++; else groups.push({ name: c.grp, span: 1 }); });
+  const n = Math.max(...cols.map(c => c.pts.length));
+  let h = `<thead><tr><th rowspan="2">Place</th>${groups.map(g => `<th colspan="${g.span}">${g.name}</th>`).join('')}</tr>`;
+  h += `<tr>${cols.map(c => `<th class="${c.bdo ? 'ls-pts-bdo' : ''}">${c.name}</th>`).join('')}</tr></thead><tbody>`;
+  for (let i = 0; i < n; i++) {
+    h += `<tr><td class="ls-pts-pos">${i + 1}</td>${cols.map(c => {
+      const v = c.pts[i];
+      return v ? `<td class="${c.bdo ? 'ls-pts-bdo' : ''}">${v}</td>` : `<td class="ls-pts-empty">–</td>`;
+    }).join('')}</tr>`;
+  }
+  const max = LS_FINISH_PTS[0] + 2 * LS_PARTIAL_PTS[0] + LS_QUAL_PTS[0];
+  h += `</tbody><tfoot><tr><td class="ls-pts-pos">Max</td><td colspan="${cols.length}" style="text-align:left;color:#8a95a1">
+    Bol d'Or (24H): Q ${LS_QUAL_PTS[0]} + 8H ${LS_PARTIAL_PTS[0]} + 16H ${LS_PARTIAL_PTS[0]} + finish ${LS_FINISH_PTS[0]} = <b style="color:#fbbf24">${max}</b></td></tr></tfoot>`;
+  t.innerHTML = h;
+}
+
 const LS_ORDER_KEY = 'ls_finish_order_v1';
 let lsFinishOrder = [];   // team names, best → worst predicted finish
-let lsDragTeam = null;
+let lsDragTeam = null, lsDragBox = null;
 
 function lsFinishPtsForPos(pos0) { return LS_FINISH_PTS[pos0] || 0; }
 function lsPosParts(pos0) {
@@ -2546,12 +3324,21 @@ function lsRenderFinishList() {
 
 // One-time drag wiring (delegated on the container, survives list re-renders).
 function lsFinishListSetup() {
-  const box = document.getElementById('ls-finish-list');
+  lsWireDragList('ls-finish-list', () => lsFinishOrder, arr => {
+    lsFinishOrder = arr;
+    lsSaveFinishOrder();
+    lsRenderFinishList();
+    lsRenderScenarioChart();
+  });
+}
+function lsWireDragList(boxId, getOrder, setOrder) {
+  const box = document.getElementById(boxId);
   if (!box || box._lsWired) return;
   box._lsWired = true;
   box.addEventListener('dragstart', e => {
     const row = e.target.closest('.ls-fin-row'); if (!row) return;
     lsDragTeam = decodeURIComponent(row.dataset.team);
+    lsDragBox = boxId;
     e.dataTransfer.effectAllowed = 'move';
     row.classList.add('ls-fin-dragging');
   });
@@ -2569,15 +3356,13 @@ function lsFinishListSetup() {
     const row = e.target.closest('.ls-fin-row');
     if (!row || !lsDragTeam) return;
     const target = decodeURIComponent(row.dataset.team);
-    if (target !== lsDragTeam) {
-      const arr = lsFinishOrder.filter(t => t !== lsDragTeam);
+    const order = getOrder();
+    if (target !== lsDragTeam && lsDragBox === boxId) {   // ignore drops from another list
+      const arr = order.filter(t => t !== lsDragTeam);
       const rect = row.getBoundingClientRect();
       const after = (e.clientY - rect.top) > rect.height / 2;
       arr.splice(arr.indexOf(target) + (after ? 1 : 0), 0, lsDragTeam);
-      lsFinishOrder = arr;
-      lsSaveFinishOrder();
-      lsRenderFinishList();
-      lsRenderScenarioChart();
+      setOrder(arr);
     }
     lsDragTeam = null;
   });
@@ -2586,9 +3371,11 @@ function lsFinishListSetup() {
 // Resulting championship if the race finishes in the current order. The team's
 // Bol d'Or round = the sum of the points for its position at every milestone.
 function lsScenarioResult(row, pos0) {
-  const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')];
   // Qualifying is already run, so use its real points rather than the drag position.
-  const parts = lsPartsFor(row, pos0);
+  return lsScenarioFromParts(row, lsPartsFor(row, pos0));
+}
+function lsScenarioFromParts(row, parts) {
+  const done = [lsRoundTotal(row, 'R1'), lsRoundTotal(row, 'R2'), lsRoundTotal(row, 'R3')];
   const scenR4 = parts.q + parts.h8 + parts.h16 + parts.fin;
   const sorted = done.slice().sort((a, b) => b - a);
   const locked = (sorted[0] || 0) + (sorted[1] || 0);   // best 2 completed (always survive)
@@ -2599,22 +3386,29 @@ function lsScenarioResult(row, pos0) {
 }
 
 function lsRenderScenarioChart() {
-  const canvas = document.getElementById('ls-chart-scenario');
-  if (!canvas) return;
   const posOf = {}; lsFinishOrder.forEach((t, i) => posOf[t] = i);
+  lsRenderScenarioInto({
+    key: 'scenario', canvasId: 'ls-chart-scenario', wrapId: 'ls-chart-scenario-wrap', statusId: 'ls-scenario-status',
+    result: row => lsScenarioResult(row, posOf[row.team] ?? 99),
+    where: row => `P${(posOf[row.team] ?? 99) + 1}`,
+  });
+}
+function lsRenderScenarioInto({ key, canvasId, wrapId, statusId, result, where }) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
 
   // Our resulting total + where it ranks against the whole field (status line).
   const usRow = LS_SEED.find(r => r.team === LS_US);
-  const usRes = lsScenarioResult(usRow, posOf[LS_US] ?? 99).resulting;
-  const usRank = LS_SEED.filter(r => lsScenarioResult(r, posOf[r.team] ?? 99).resulting > usRes).length + 1;
-  const status = document.getElementById('ls-scenario-status');
+  const usRes = result(usRow).resulting;
+  const usRank = LS_SEED.filter(r => result(r).resulting > usRes).length + 1;
+  const status = document.getElementById(statusId);
   if (status) {
     status.textContent = `Champion-Hert → P${usRank} (${usRes} pts)`;
     status.style.color = usRank === 1 ? '#4ade80' : '#f87171';
   }
 
   const rows = LS_SEED.filter(lsCanBeatUs).map(row => {
-    const s = lsScenarioResult(row, posOf[row.team] ?? 99);
+    const s = result(row);
     return { row, s, total: s.resulting };
   }).sort((a, b) => b.total - a.total || b.s.locked - a.s.locked);
 
@@ -2646,11 +3440,11 @@ function lsRenderScenarioChart() {
       backgroundColor: rows.map(() => '#3a3a3a'), borderWidth: 0 },
   ];
 
-  const wrap = document.getElementById('ls-chart-scenario-wrap');
+  const wrap = document.getElementById(wrapId);
   if (wrap) wrap.style.height = Math.round(Math.max(220, rows.length * 20 + 60) * 1.5) + 'px';
 
-  if (lsCharts.scenario) lsCharts.scenario.destroy();
-  lsCharts.scenario = new Chart(canvas, {
+  if (lsCharts[key]) lsCharts[key].destroy();
+  lsCharts[key] = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets },
     plugins: [lsBarLabels],
@@ -2669,8 +3463,7 @@ function lsRenderScenarioChart() {
             title: items => rows[items[0].dataIndex].row.team,
             afterBody: items => {
               const r = rows[items[0].dataIndex]; const s = r.s;
-              const pos = (posOf[r.row.team] ?? 99) + 1;
-              const bdo = `P${pos}: Qual ${s.parts.q} + 8h ${s.parts.h8} + 16h ${s.parts.h16} + Finish ${s.parts.fin} = ${s.scenR4}`;
+              const bdo = `${where(r.row)}: Qual ${s.parts.q} + 8h ${s.parts.h8} + 16h ${s.parts.h16} + Finish ${s.parts.fin} = ${s.scenR4}`;
               return `Bol d'Or ${bdo}${s.counted ? '' : `  (dropped — keeps ${s.third})`}\nChampionship: ${s.resulting}`;
             },
             label: ctx => ctx.parsed.x ? ` ${ctx.dataset.label}: ${ctx.parsed.x}` : null,
@@ -2689,10 +3482,74 @@ function renderLiveStanding() {
   lsInitFinishOrder();
   lsRenderFinishList();
   lsRenderScenarioChart();
+  lsInitMsOrder();
+  lsRenderMsLists();
+  lsRenderMsChart();
+  lsRenderPtsTable();
 }
+
+// ── Milestone scenario: a separate running order @8h, @16h and at the finish ──
+const LS_MS_KEY = 'ls_milestone_order_v1';
+const LS_MS = [
+  { key: 'h8',  box: 'ls-ms-h8',  label: '8h',     pts: LS_PARTIAL_PTS },
+  { key: 'h16', box: 'ls-ms-h16', label: '16h',    pts: LS_PARTIAL_PTS },
+  { key: 'fin', box: 'ls-ms-fin', label: 'Finish', pts: LS_FINISH_PTS },
+];
+let lsMsOrder = { h8: [], h16: [], fin: [] };
+function lsLoadMsOrder() { try { const r = localStorage.getItem(LS_MS_KEY); if (r) lsMsOrder = { ...lsMsOrder, ...JSON.parse(r) }; } catch (e) {} }
+function lsSaveMsOrder() { try { localStorage.setItem(LS_MS_KEY, JSON.stringify(lsMsOrder)); } catch (e) {} }
+// Each list starts as a copy of the single-order scenario; keep every list valid.
+function lsInitMsOrder() {
+  const all = LS_SEED.map(r => r.team);
+  LS_MS.forEach(m => {
+    const base = (lsMsOrder[m.key] || []).length ? lsMsOrder[m.key] : lsFinishOrder;
+    const order = base.filter(t => all.includes(t));
+    lsMsOrder[m.key] = [...order, ...lsFinishOrder.filter(t => !order.includes(t))];
+  });
+}
+function lsMsPos(m, team) { const i = lsMsOrder[m.key].indexOf(team); return i < 0 ? 99 : i; }
+function lsMsResult(row) {
+  const parts = { q: lsPartsFor(row, 99).q };
+  LS_MS.forEach(m => parts[m.key] = m.pts[lsMsPos(m, row.team)] || 0);
+  return lsScenarioFromParts(row, parts);
+}
+function lsRenderMsLists() {
+  LS_MS.forEach(m => {
+    const box = document.getElementById(m.box);
+    if (!box) return;
+    box.innerHTML = lsMsOrder[m.key].map((team, i) => {
+      const row = LS_SEED.find(r => r.team === team);
+      const us = team === LS_US;
+      return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="true" data-team="${encodeURIComponent(team)}" title="${team}">
+        <span class="ls-fin-pos">P${i + 1}</span>
+        <span class="ls-fin-pts" title="${m.label} P${i + 1}">${m.pts[i] || 0}</span>
+        <span class="ls-fin-dot" style="background:${lsColor(row)}"></span>
+        <span class="ls-fin-name">${team}</span>
+      </div>`;
+    }).join('');
+  });
+}
+function lsRenderMsChart() {
+  lsRenderScenarioInto({
+    key: 'ms', canvasId: 'ls-chart-ms', wrapId: 'ls-chart-ms-wrap', statusId: 'ls-ms-status',
+    result: lsMsResult,
+    where: row => LS_MS.map(m => `${m.label} P${lsMsPos(m, row.team) + 1}`).join(' · '),
+  });
+}
+function lsMsSetup() {
+  LS_MS.forEach(m => lsWireDragList(m.box, () => lsMsOrder[m.key], arr => {
+    lsMsOrder[m.key] = arr;
+    lsSaveMsOrder();
+    lsRenderMsLists();
+    lsRenderMsChart();
+  }));
+}
+
 lsLoad();
 lsLoadFinishOrder();
+lsLoadMsOrder();
 lsFinishListSetup();
+lsMsSetup();
 
 // ══════════════════════════════════════════════════════════════
 //  QUALIFYING — SST
@@ -2997,7 +3854,7 @@ async function fetchData() {
 
     renderCharts();
     if (document.getElementById('tab-stints').classList.contains('active')) {
-      buildStintFilterBar(); renderStints();
+      buildStintFilterBar(); renderStints(); renderPitForecast();
     }
     // Keep the live in-race projection fresh from the feed.
     lsBuildLivePosMap();
@@ -3203,7 +4060,7 @@ function feedBestSnapshot() {
 }
 
 async function saveToStorage() {
-  if (!rawData?.Titre) return;
+  if (TEST_MODE || !rawData?.Titre) return;
   const title = rawData.Titre;
   const { event, session } = splitEventSession(title);
   // Only ever save the live session. (This used to set activeSessionKey to the
@@ -3303,9 +4160,11 @@ async function loadFromStorage() {
 // Archived sessions open in their own read-only tab (?view=<key>), so the live
 // tab keeps recording the running session undisturbed.
 const VIEW_KEY = new URLSearchParams(location.search).get('view');
+const TEST_MODE = new URLSearchParams(location.search).get('test') === 'race';
 async function switchToSession(key) {
   if (!key) return; // the "● Live" placeholder
   if (key === '__live__') { location.href = location.pathname; return; }
+  if (key === '__test__') { window.open(`${location.pathname}?test=race`, '_blank'); buildSessionPicker(); return; }
   if (!VIEW_KEY) {
     // Archives open in another tab so this one keeps recording. If the browser
     // opens it here instead, the banner below makes that obvious.
@@ -3333,11 +4192,12 @@ async function buildSessionPicker() {
   sessions.forEach(s => { (byEvent[s.event] = byEvent[s.event] || []).push(s); });
   const esc = t => String(t).replace(/</g, '&lt;');
   // The live session isn't archived until its first lap: show it anyway.
-  const liveOpt = VIEW_KEY
+  const liveOpt = (VIEW_KEY || TEST_MODE)
     ? `<option value="__live__">← Back to live</option>`
     : (activeSessionKey && !sessions.some(s => s.key === activeSessionKey) && rawData?.Titre
         ? `<option value="" selected>● Live — ${esc(splitEventSession(rawData.Titre).session)}</option>` : '');
-  picker.innerHTML = liveOpt + Object.entries(byEvent).map(([event, list]) =>
+  const testOpt = TEST_MODE ? `<option value="" selected>🧪 Test race (synthetic)</option>` : `<option value="__test__">🧪 Open test race (synthetic)</option>`;
+  picker.innerHTML = liveOpt + testOpt + Object.entries(byEvent).map(([event, list]) =>
     `<optgroup label="${esc(event)}">` +
     list.map(s => `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${sessionDayLabel(s)}</option>`).join('') +
     `</optgroup>`
@@ -3441,11 +4301,86 @@ async function loadFromSheets() {
   } catch(e) { console.warn('Sheets load failed:', e); }
 }
 
+// ── Test race: 4 h of synthetic race data for the top 8 ─────────
+// Stints of 24–28 laps (the first one 2 laps shorter: the bikes do 2 laps
+// before the start), realistic Paul Ricard SST pace, one safety car period.
+// Riders come from the qualifying sessions (Blue / Yellow / Red).
+async function buildTestRace() {
+  let seed = 38;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const irand = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const H = 3600000, now = Math.floor(Date.now() / 1000) * 1000, start = now - 4 * H;
+  const sc = { start: start + 100 * 60000, end: start + 112 * 60000 };
+
+  const riders = {};
+  try {
+    (await collectQualiSessions()).sort((a, b) => b.round - a.round).forEach(s => {
+      Object.entries(s.best || {}).forEach(([num, v]) => {
+        const b = baseNum(num);
+        if (!v.rider) return;
+        riders[b] = riders[b] || {};
+        if (!riders[b][s.rider]) riders[b][s.rider] = v.rider;
+      });
+    });
+  } catch (e) {}
+  const basePace = { '38': 116.4, '49': 116.9, '27': 117.3, '41': 117.0, '25': 116.6, '44': 117.9, '9': 117.5, '77': 116.8 };
+
+  DEFAULT_TEAMS.forEach(num => {
+    const names = ['Blue', 'Yellow', 'Red'].map(g => riders[num]?.[g] || `${g} rider #${num}`);
+    const riderPace = names.map((_, i) => basePace[num] + [0, 0.35, 0.7][i] + (rnd() - 0.5) * 0.3);
+    const laps = [], stints = [[]];
+    let t = start, lap = 0, stintNo = 0, inStint = 0, stintLen = irand(24, 28) - 2;
+    for (;;) {
+      const r = stintNo % 3;
+      let sec = riderPace[r] + (rnd() - 0.5) * 1.2 + inStint * 0.02;   // noise + tyre drop-off
+      if (lap === 0) sec += 3;                                          // standing start
+      if (t + sec * 1000 > sc.start && t < sc.end) sec = 148 + rnd() * 6; // safety car
+      // Sectors ≈ 29% / 26% / 45% of the lap; the pit lane sits in the in-lap's
+      // last sector and the out-lap's first sector.
+      let s1 = sec * 0.292, s2 = sec * 0.258, s3 = sec - s1 - s2;
+      if (inStint === 0 && stintNo > 0) { const x = 34 + rnd() * 9 + (rnd() < 0.1 ? 8 : 0); s1 += x; sec += x; } // out-lap: stop + pit exit
+      if (inStint === stintLen - 1) { const x = 19 + rnd() * 4; s3 += x; sec += x; }                            // in-lap: pit entry
+      if (t + sec * 1000 > now) break;
+      t += sec * 1000; lap++;
+      const e = { lap, timeSec: +sec.toFixed(3), timeStr: secToStr(sec), initials: initials(names[r]), rider: names[r],
+                  ts: new Date(t).toLocaleTimeString(), tsMs: t, gap1st: null,
+                  s1: +s1.toFixed(3), s2: +s2.toFixed(3), s3: +s3.toFixed(3) };
+      laps.push(e); stints[stints.length - 1].push(e);
+      if (++inStint >= stintLen) { stints.push([]); stintNo++; inStint = 0; stintLen = irand(24, 28); }
+    }
+    teamData[num] = { name: teamNameByNum[num] || `Team #${num}`, rider: names[stintNo % 3], cat: 'SST', laps, stints };
+    prevLapCount[num] = lap;
+  });
+  flagLog.length = 0;
+  flagLog.push({ t: start, flag: 0 }, { t: sc.start, flag: FLAG_SC }, { t: sc.end, flag: 0 });
+  rawData = { Titre: "TEST — BOL D'OR - Race (synthetic, 4h in)", Drapeau: 0, HeureJourUTC: new Date(now).toISOString(),
+              TempsEcoule: 4 * H, TempsRestant: 20 * H, Colonnes: [], Donnees: [] };
+}
+
 // ── Init ──────────────────────────────────────────────────────
 // Storage (IndexedDB/localStorage/Sheets) is best-effort persistence only.
 // A failure in any of it must never block the live feed from starting.
 DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
 (async () => {
+  if (TEST_MODE) {
+    try {
+      await loadTeamNames();
+      await buildTestRace();
+      await buildSessionPicker();
+      document.getElementById('title').textContent = rawData.Titre;
+      document.getElementById('clock').textContent = eventClock(Date.parse(rawData.HeureJourUTC), { second: '2-digit' });
+      document.getElementById('remaining').textContent = msToTime(rawData.TempsRestant);
+      document.getElementById('status-dot').style.background = '#a855f7';
+      const bar = document.createElement('div');
+      bar.style.cssText = 'background:#4c1d95;color:#e9d5ff;padding:6px 16px;font-size:12px;display:flex;align-items:center;gap:12px';
+      bar.innerHTML = `<b>Test race</b> — synthetic data (4 h in), nothing is saved and this page is not recording.
+        <a href="${location.pathname}" style="background:#16a34a;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none">← Back to live</a>`;
+      document.querySelector('header').after(bar);
+      rebuildGapHistory();
+      switchTab('stints');
+    } catch (e) { console.error('Test race failed:', e); }
+    return;
+  }
   if (VIEW_KEY) {
     // Read-only archive tab: show the chosen session, no live feed, no saving.
     try {

@@ -292,6 +292,8 @@
     <div>Time: <b id="clock">--:--:--</b></div>
     <div>Remaining: <b id="remaining">--:--:--</b></div>
     <div>Updated: <b id="last-update">—</b></div>
+    <div id="sync-status" style="font-size:11px;color:#666" title="Laps are shared through the Cloudflare relay, so any open page (local or online) keeps the race history">Sync: —</div>
+    <div id="relay-usage" style="font-size:11px;color:#666" title="Cloudflare relay requests today (UTC). Free limit: 100,000/day">Relay: —</div>
     <div style="display:flex;align-items:center;gap:6px">
       <select id="session-picker" onchange="switchToSession(this.value)"
         style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:2px 6px;border-radius:4px;font-size:11px;max-width:240px">
@@ -450,7 +452,7 @@
   </div>
 
   <div class="chart-card">
-    <h3>Active stints — laps done · dotted line = planned pit lap (the team's stint laps in the forecast)</h3>
+    <h3>Active stints — laps done · line = planned pit lap (the team's stint laps in the forecast)</h3>
     <div class="chart-wrap" style="height:220px"><canvas id="chart-stints"></canvas></div>
   </div>
 
@@ -767,6 +769,80 @@ const redFlagBands = {
     ctx.restore();
   }
 };
+// ── Day / night on the clock-time charts ─────────────────────
+// Sunrise/sunset at Circuit Paul Ricard from the NOAA solar equations, with
+// the official definition (sun's upper limb on the horizon, zenith 90.833°).
+// Matches the US Naval Observatory to the minute (19 Sep 2026: 07:21 / 19:40).
+const TRACK_LAT = 43.2506, TRACK_LON = 5.7917;
+const sunCache = {};
+function sunRiseSet(dayUtcMs) {
+  if (sunCache[dayUtcMs]) return sunCache[dayUtcMs];
+  const rad = Math.PI / 180, jd0 = dayUtcMs / 86400000 + 2440587.5;
+  const at = (min, rising) => {
+    const T = (jd0 + min / 1440 - 2451545) / 36525;
+    const L0 = (280.46646 + T * (36000.76983 + T * 0.0003032)) % 360;
+    const M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+    const e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+    const C = Math.sin(M * rad) * (1.914602 - T * (0.004817 + 0.000014 * T)) + Math.sin(2 * M * rad) * (0.019993 - 0.000101 * T) + Math.sin(3 * M * rad) * 0.000289;
+    const om = 125.04 - 1934.136 * T;
+    const lam = L0 + C - 0.00569 - 0.00478 * Math.sin(om * rad);
+    const eps = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60 + 0.00256 * Math.cos(om * rad);
+    const dec = Math.asin(Math.sin(eps * rad) * Math.sin(lam * rad));
+    const y = Math.tan(eps * rad / 2) ** 2;
+    const eqt = 4 / rad * (y * Math.sin(2 * L0 * rad) - 2 * e * Math.sin(M * rad) + 4 * e * y * Math.sin(M * rad) * Math.cos(2 * L0 * rad)
+      - 0.5 * y * y * Math.sin(4 * L0 * rad) - 1.25 * e * e * Math.sin(2 * M * rad));
+    const ha = Math.acos(Math.cos(90.833 * rad) / (Math.cos(TRACK_LAT * rad) * Math.cos(dec)) - Math.tan(TRACK_LAT * rad) * Math.tan(dec)) / rad;
+    return 720 - 4 * TRACK_LON - eqt + (rising ? -4 : 4) * ha;
+  };
+  const solve = rising => { let t = 720; for (let i = 0; i < 3; i++) t = at(t, rising); return dayUtcMs + t * 60000; };
+  return (sunCache[dayUtcMs] = { rise: solve(true), set: solve(false) });
+}
+// Day/night strip under the time axis: amber = day, blue = night, with the
+// exact sunrise / sunset time written on it. The plot itself stays as is.
+const SUN_STRIP = 16;
+const sunBands = {
+  id: 'sunBands',
+  beforeLayout(chart) {
+    const lay = chart.options.layout || (chart.options.layout = {});
+    const p = lay.padding;
+    lay.padding = typeof p === 'object' && p ? { ...p, bottom: SUN_STRIP + 4 } : { top: p || 0, left: p || 0, right: p || 0, bottom: SUN_STRIP + 4 };
+  },
+  afterDraw(chart) {
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    const min = x.min, max = x.max;
+    if (!(min > 1e12) || max <= min) return;
+    const D = 86400000, events = [];
+    for (let d = Math.floor(min / D) * D - D; d <= max + D; d += D) {
+      const s = sunRiseSet(d);
+      events.push({ t: s.rise, up: true }, { t: s.set, up: false });
+    }
+    events.sort((p, q) => p.t - q.t);
+    const px = t => Math.min(a.right, Math.max(a.left, x.getPixelForValue(t)));
+    const top = x.bottom + 2, h = SUN_STRIP;
+    ctx.save();
+    events.forEach((ev, i) => {
+      if (!events[i + 1]) return;
+      const x1 = px(ev.t), x2 = px(events[i + 1].t);
+      if (x2 <= x1) return;
+      ctx.fillStyle = ev.up ? 'rgba(250,204,21,0.28)' : 'rgba(59,90,190,0.45)';
+      ctx.fillRect(x1, top, x2 - x1, h);
+    });
+    ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textBaseline = 'middle';
+    events.forEach(ev => {
+      if (ev.t < min || ev.t > max) return;
+      const p = x.getPixelForValue(ev.t), col = ev.up ? '#fde68a' : '#bfdbfe';
+      const txt = `${ev.up ? '☀ sunrise' : '☾ sunset'} ${eventClock(ev.t)}`;
+      const w = ctx.measureText(txt).width;
+      // Label on the day side of the change, starting at the exact moment.
+      const left = ev.up ? p + 4 : p - 4 - w;
+      ctx.fillStyle = col; ctx.textAlign = 'left';
+      ctx.fillText(txt, Math.max(a.left + 2, Math.min(a.right - w - 2, left)), top + h / 2 + 1);
+      ctx.fillStyle = '#fff'; ctx.fillRect(p - 0.5, top, 1, h);
+    });
+    ctx.restore();
+  }
+};
+
 let stintChart = null;
 let refTeam = DEFAULT_TEAMS[0]; // "us"
 let maxObservedStint = 0;
@@ -1542,12 +1618,13 @@ const TW_KEY = 'tw_window_v1', TW_DEFAULT = 4 * 3600000, TW_AHEAD = 70 * 60000, 
 let twState = { from: 0, to: TW_DEFAULT, follow: true };   // offsets from the session start (ms)
 try { twState = { ...twState, ...(JSON.parse(localStorage.getItem(TW_KEY)) || {}) }; } catch (e) {}
 function twSave() { try { localStorage.setItem(TW_KEY, JSON.stringify(twState)); } catch (e) {} }
-// Session span: feed-now − elapsed → + elapsed + remaining (+5 min margin).
+// Session span: feed-now − elapsed → + elapsed + remaining (+15 min margin,
+// e.g. the race 15:00 → 15:15 next day).
 function twSession() {
   if (!rawData?.HeureJourUTC) return null;
   const now = new Date(rawData.HeureJourUTC).getTime();
   const start = now - (rawData.TempsEcoule || 0);
-  const span = (rawData.TempsEcoule || 0) + (rawData.TempsRestant || 0) + 5 * 60000;
+  const span = (rawData.TempsEcoule || 0) + (rawData.TempsRestant || 0) + 15 * 60000;
   return span > 0 ? { start, span, nowOff: now - start } : null;
 }
 function twClamp(sess) {
@@ -1756,7 +1833,7 @@ function renderLapTimesTimeChart(active) {
   lapTimesTimeChart = new Chart(document.getElementById('chart-laptimes-time'), {
     type: 'scatter',
     data: { datasets },
-    plugins: [lapPitLabelPluginTime, redFlagBands],
+    plugins: [sunBands, lapPitLabelPluginTime, redFlagBands],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       plugins: {
@@ -1936,7 +2013,7 @@ function updateLapHistory(data) {
         deferLap = true;
       } else {
         addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st,
-                      rider: riderByNum[num] || '', ...readSectors(r, timeSec, num, lastLapStr) });
+                      rider: riderByNum[num] || '', pits: pitCount, ...readSectors(r, timeSec, num, lastLapStr) });
       }
     }
 
@@ -1994,7 +2071,8 @@ function renderStints() {
   // and a dotted box to the team's planned stint end (its forecast stint laps).
   const labels  = active.map(n => `#${n}`);
   const done    = active.map(n => { const s = teamData[n].stints; return (s[s.length-1]||[]).length; });
-  const planned = active.map(n => pfStintLaps(n));
+  const pfWin = pfRaceWindow();
+  const planned = active.map(n => pfForecast(n, pfWin, nowMs).curPlan);   // first stint: 2 laps shorter
   const colors  = active.map(n => colorForTeam(n));
   const xMax = Math.max(...planned, ...done) + 1;
 
@@ -2006,13 +2084,20 @@ function renderStints() {
       ctx.save();
       bars.forEach((bar, i) => {
         const h = bar.height, top = bar.y - h / 2;
-        // Dotted line at the planned pit lap, with the target next to it.
-        const px = x.getPixelForValue(planned[i]);
-        ctx.strokeStyle = colors[i]; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+        // Laps still to go: the team colour at 15% between the bar and the end line.
+        const px = x.getPixelForValue(planned[i]), bx = x.getPixelForValue(done[i]);
+        if (px > bx) { ctx.fillStyle = colors[i] + '26'; ctx.fillRect(bx, top, px - bx, h); }
+        // Solid end line at the planned pit lap, with the target next to it.
+        ctx.strokeStyle = colors[i]; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.moveTo(px, top - 2); ctx.lineTo(px, top + h + 2); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = colors[i]; ctx.font = '10px Segoe UI, Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.fillText(planned[i], px + 4, bar.y);
+        ctx.fillStyle = colors[i]; ctx.font = 'bold 12px Segoe UI, Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(planned[i], px + 6, bar.y);
+        // Laps left: in the empty gap, left-aligned just after the filled bar.
+        const left = planned[i] - done[i];
+        if (left > 0 && px - x.getPixelForValue(done[i]) > 18) {
+          ctx.font = 'bold 11px Segoe UI, Arial'; ctx.textAlign = 'left';
+          ctx.fillText(`${left} left`, x.getPixelForValue(done[i]) + 5, bar.y);
+        }
         // Laps done, inside the bar on the right.
         if (done[i] > 0) {
           const n = parseInt(colors[i].slice(1), 16);
@@ -2239,16 +2324,21 @@ function pfRenderFilter() {
     }).join('');
 }
 
-// Average of the team's full stints (same stints the SST Stint Analysis counts).
+// Stint laps: 26 by default. The first stint is 2 laps shorter: the sighting
+// lap and the warm-up lap burn that fuel before the start.
+const PF_DEFAULT_STINT = 26, FIRST_STINT_SHORT = 2;
+// Average of the team's full stints (same stints the SST Stint Analysis counts);
+// the first stint counts as its length + 2, i.e. as a full tank.
 function pfAvgStint(num) {
   const stints = (teamData[num]?.stints || []).slice(0, -1);
-  const lens = stints.map((st, i) => ({ len: st.length, i })).filter(x => isStintCounted(num, x.i, x.len)).map(x => x.len);
+  const lens = stints.map((st, i) => ({ len: st.length, i })).filter(x => isStintCounted(num, x.i, x.len))
+    .map(x => x.len + (x.i === 0 ? FIRST_STINT_SHORT : 0));
   return lens.length ? { avg: lens.reduce((a, b) => a + b, 0) / lens.length, n: lens.length } : null;
 }
 function pfStintLaps(num) {
   if (pfLaps[num]) return pfLaps[num];
   const a = pfAvgStint(num);
-  return a ? Math.round(a.avg) : stintCountThreshold();
+  return a ? Math.round(a.avg) : PF_DEFAULT_STINT;
 }
 
 // Race pace: average of the laps within 6% of the median lap, so in/out laps,
@@ -2273,16 +2363,18 @@ function pfForecast(num, win, nowMs) {
     if (last?.tsMs >= win.start && last.tsMs <= win.end) past.push({ t: last.tsMs, lap: last.lap });
   });
   const fut = [];
+  // The ongoing stint's planned length: 2 laps shorter while it's the first one.
+  const curPlan = past.length ? L : L - FIRST_STINT_SHORT;
   let t, lap;
   if (laps.length) {
     const last = laps[laps.length - 1];
     const cur = ((td.stints || [[]]).slice(-1)[0] || []).filter(l => (l.tsMs || 0) >= win.start).length;
-    const left = Math.max(0, L - cur);
+    const left = Math.max(0, curPlan - cur);
     t = Math.max(last.tsMs + left * pace * 1000, left ? 0 : nowMs);
     lap = last.lap + left;
   } else {
-    t = win.start + L * pace * 1000;
-    lap = L;
+    t = win.start + curPlan * pace * 1000;
+    lap = curPlan;
   }
   while (t < win.end) {
     fut.push({ t, lap });
@@ -2292,7 +2384,7 @@ function pfForecast(num, win, nowMs) {
   // Stints: the ones done (a pit made), plus the current one, plus one after
   // every forecast stop.
   const done = past.length, planned = done + 1 + fut.length;
-  return { past, fut, pace, L, done, planned, left: planned - done };
+  return { past, fut, pace, L, curPlan, done, planned, left: planned - done };
 }
 
 function pfRenderRows(nums) {
@@ -2305,7 +2397,7 @@ function pfRenderRows(nums) {
     const col = colorForTeam(n), a = pfAvgStint(n), set = !!pfLaps[n];
     const paceSet = pfPace[n] != null, pace = paceSet ? pfPace[n] : pfAutoPace(n, win);
     const nm = teamData[n]?.name || teamNameByNum[n] || '';
-    const avgTxt = a ? `avg ${a.avg.toFixed(1)} laps (${a.n} stint${a.n > 1 ? 's' : ''})` : `no full stints yet · default ${stintCountThreshold()}`;
+    const avgTxt = a ? `avg ${a.avg.toFixed(1)} laps (${a.n} stint${a.n > 1 ? 's' : ''})` : `no full stints yet · default ${PF_DEFAULT_STINT} (1st stint ${PF_DEFAULT_STINT - FIRST_STINT_SHORT})`;
     return `<div class="pf-row${baseNum(n) === DEFAULT_TEAMS[0] ? ' pf-us' : ''}">
       <span class="pf-dot" style="background:${col}"></span>
       <span class="pf-name" title="${nm.replace(/"/g, '&quot;')}"><b style="color:${col}">#${n}</b> ${nm}</span>
@@ -2366,8 +2458,18 @@ function renderPitForecast(keepRows) {
   const decor = {
     id: 'pfDecor',
     beforeDatasetsDraw(chart) {
-      const { ctx, chartArea: a, scales: { x } } = chart;
+      const { ctx, chartArea: a, scales: { x, y } } = chart;
       ctx.save();
+      // Race time already run (start → now): each team's row at 25% of its colour.
+      const ranTo = Math.min(nowMs, win.end);
+      if (ranTo > win.start) {
+        const x1 = Math.max(a.left, x.getPixelForValue(win.start)), x2 = Math.min(a.right, x.getPixelForValue(ranTo));
+        nums.forEach((n, i) => {
+          const top = y.getPixelForValue(i - 0.5) + 1, bot = y.getPixelForValue(i + 0.5) - 1;
+          ctx.fillStyle = colorForTeam(n) + '40';
+          ctx.fillRect(x1, top, x2 - x1, bot - top);
+        });
+      }
       [[FLAG_RED, 'rgba(239,68,68,0.2)', 'RED FLAG', '#f87171'], [FLAG_SC, 'rgba(250,204,21,0.2)', 'SC', '#fde047']].forEach(([code, fill, txt, tc]) => {
         flagPeriods(code).forEach(p => {
           const x1 = Math.max(a.left, x.getPixelForValue(p.start)), x2 = Math.min(a.right, x.getPixelForValue(p.end));
@@ -2377,7 +2479,7 @@ function renderPitForecast(keepRows) {
           ctx.fillText(txt, x1 + 2, a.bottom - 4);
         });
       });
-      [8, 16].forEach(h => {
+      [8, 16, 24].forEach(h => {
         const px = x.getPixelForValue(win.start + h * H);
         ctx.strokeStyle = '#90b4d6'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
         ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
@@ -2386,7 +2488,7 @@ function renderPitForecast(keepRows) {
       });
       if (nowMs > win.start && nowMs < win.end) {
         const px = x.getPixelForValue(nowMs);
-        ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 1;
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
         ctx.fillStyle = '#fff'; ctx.font = '10px Segoe UI, Arial'; ctx.textAlign = 'center';
         ctx.fillText('now', px, a.top - 4);
@@ -2437,14 +2539,15 @@ function renderPitForecast(keepRows) {
   pfChart = new Chart(canvas, {
     type: 'scatter',
     data: { datasets },
-    plugins: [decor],
+    plugins: [sunBands, decor],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       layout: { padding: { top: 16, right: 190 } },
       scales: {
-        x: { type: 'linear', min: win.start, max: win.end,
-             afterBuildTicks: sc => { sc.ticks = []; for (let t = win.start; t <= win.end; t += H) sc.ticks.push({ value: t }); },
-             ticks: { color: '#888', maxRotation: 0, autoSkip: false, callback: v => eventClock(v) },
+        // 15:00 → 15:15 next day: 15 min past the finish for the last laps.
+        x: { type: 'linear', min: win.start, max: win.end + 15 * 60000,
+             afterBuildTicks: sc => { sc.ticks = []; for (let t = win.start; t <= win.end; t += H) sc.ticks.push({ value: t }); sc.ticks.push({ value: win.end + 15 * 60000 }); },
+             ticks: { color: '#888', maxRotation: 0, autoSkip: true, autoSkipPadding: 4, callback: v => v === win.end ? '' : eventClock(v) },
              grid: { color: '#1c1c1c' } },
         y: { type: 'linear', min: -0.5, max: Math.max(0.5, nums.length - 0.5), reverse: true,
              afterBuildTicks: sc => { sc.ticks = nums.map((_, i) => ({ value: i })); },
@@ -2679,7 +2782,7 @@ function renderStintLines(win, nowMs) {
     // A stint that has only just started (0 laps) isn't worth a point.
     return saStintRows(n, win, nowMs).map((r, i) => r.len ? ({
       x: i + 1, y: r.len, hollow: r.active, grey: r.odd,
-      info: `${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.L})` : ''}${r.odd ? ' · odd, not counted' : ''}`
+      info: `${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.curPlan})` : ''}${r.odd ? ' · odd, not counted' : ''}`
         + ` · laps ${r.laps[0]?.lap ?? '—'}–${r.laps[r.laps.length - 1]?.lap ?? '—'} · avg ${saFmt(racePace(r.laps))} · best ${saFmt(saBest(r.laps))}`,
     }) : null).filter(Boolean);
   }, { xTitle: 'Stint', yTitle: 'Laps', fmt: d => d.hollow ? `${d.y}▶` : d.y });
@@ -2713,9 +2816,9 @@ function renderStintGrid(win, nowMs) {
     const scale = Math.max(32, ...rows.map(r => r.len), f.L + 2);
     const pct = v => (v / scale * 100).toFixed(1) + '%';
     const stintRows = rows.map((r, i) => {
-      const plan = r.active && f.L > r.len
-        ? `<div class="sa-plan" style="left:${pct(r.len)};width:${pct(f.L - r.len)}">${f.L}</div>` : '';
-      return `<div class="sa-stint${r.odd ? ' sa-odd' : ''}${r.active ? ' sa-active' : ''}" title="${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.L})` : ''} · avg ${saFmt(racePace(r.laps))} · best ${saFmt(saBest(r.laps))}">
+      const plan = r.active && f.curPlan > r.len
+        ? `<div class="sa-plan" style="left:${pct(r.len)};width:${pct(f.curPlan - r.len)}">${f.curPlan}</div>` : '';
+      return `<div class="sa-stint${r.odd ? ' sa-odd' : ''}${r.active ? ' sa-active' : ''}" title="${saOrdinal(i + 1)} stint · ${r.rider} · ${r.len} laps${r.active ? ` (ongoing, planned ${f.curPlan})` : ''} · avg ${saFmt(racePace(r.laps))} · best ${saFmt(saBest(r.laps))}">
         <div class="sa-lbl"><b>${r.active ? '▶ ' : ''}${saOrdinal(i + 1)}</b> ${saShortName(r.rider)}</div>
         <div class="sa-track"><div class="sa-bar" style="width:${pct(r.len)};background:${col}">${r.len}</div>${plan}</div>
       </div>`;
@@ -3954,6 +4057,7 @@ async function fetchData() {
   try {
     const res = await fetch(`${API}?t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Feed HTTP ${res.status}${res.status === 404 ? ' — open the app through serve.py (python serve.py)' : ''}`);
+    relayUsage(res.headers.get('X-Relay-Today'));
     const json = await res.json();
     const data = json.competitors ? adaptResultsFeed(json) : json;
     rawData = data;
@@ -4431,7 +4535,8 @@ async function buildTestRace() {
   let seed = 38;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
   const irand = (a, b) => a + Math.floor(rnd() * (b - a + 1));
-  const H = 3600000, now = Math.floor(Date.now() / 1000) * 1000, start = now - 4 * H;
+  // Race-day timeline: start 15:00 local (Sat 19 Sep), "now" 4 h in = 19:00.
+  const H = 3600000, start = Date.UTC(2026, 8, 19, 15, 0) - eventTzOffsetMin * 60000, now = start + 4 * H;
   const sc = { start: start + 100 * 60000, end: start + 112 * 60000 };
 
   const riders = {};
@@ -4478,6 +4583,133 @@ async function buildTestRace() {
   rawData = { Titre: "TEST — BOL D'OR - Race (synthetic, 4h in)", Drapeau: 0, HeureJourUTC: new Date(now).toISOString(),
               TempsEcoule: 4 * H, TempsRestant: 20 * H, Colonnes: [], Donnees: [] };
 }
+
+// ── Sync through the Cloudflare relay ─────────────────────────
+// Every page recording the live session (localhost or GitHub Pages) uploads
+// its laps and flag changes every 30 s and downloads what other pages
+// recorded, so a page opened late, or reopened after a crash, gets the whole
+// session. Laps are keyed by bike + lap number (the first upload wins), and
+// each lap carries the feed's pit count, which rebuilds the stints.
+const SYNC_URL = FEED_RELAY, SYNC_EVERY = 30000;
+let syncSession = null, syncSinceId = 0, syncPushed = new Set(), syncFlagCount = 0, syncBusy = false;
+function syncSessionId() {
+  if (TEST_MODE || VIEW_KEY || !rawData?.Titre || !activeSessionKey || activeSessionKey !== liveSessionKey()) return null;
+  return activeSessionKey.replace(/^ewc_session_(\d{4}-\d{2}-\d{2})_\d{4}_/, '$1_');   // day + title: same on every page
+}
+function syncStatus(text, color) {
+  const el = document.getElementById('sync-status');
+  if (el) { el.textContent = `Sync: ${text}`; el.style.color = color || '#666'; }
+}
+// Rebuild a team's stints from the laps' pit counts (stint n = laps after pit n).
+function rebuildStintsFromPits(num) {
+  const td = teamData[num];
+  let last = 0;
+  const groups = new Map();
+  td.laps.forEach(l => {
+    if (Number.isFinite(l.pits)) last = l.pits;
+    if (!groups.has(last)) groups.set(last, []);
+    groups.get(last).push(l);
+  });
+  td.stints = [...groups.keys()].sort((a, b) => a - b).map(k => groups.get(k));
+  if (!td.stints.length) td.stints = [[]];
+  if ((prevPitCount[num] || 0) > last) td.stints.push([]);   // pitted, new stint has no lap yet
+}
+function syncMerge(rows) {
+  const touched = new Set();
+  rows.forEach(r => {
+    const num = r.num, d = r.data || {};
+    syncPushed.add(`${num}|${r.lap}`);
+    if (!teamData[num]) {
+      teamData[num] = { name: d.team || teamNameByNum[baseNum(num)] || '', rider: d.rider || '', cat: d.cat || '', laps: [], stints: [[]] };
+      colorForTeam(num);
+    }
+    const td = teamData[num];
+    if (td.laps.some(l => l.lap === r.lap)) return;
+    const { team, cat, ...lap } = d;
+    td.laps.push({ ...lap, lap: r.lap, pits: r.pits ?? d.pits });
+    touched.add(num);
+  });
+  touched.forEach(num => { teamData[num].laps.sort((a, b) => a.lap - b.lap); rebuildStintsFromPits(num); });
+  return touched.size;
+}
+function syncMergeFlags(remote) {
+  if (!remote?.length) return;
+  const all = [...flagLog, ...remote.map(f => ({ t: f.t, flag: f.flag }))].sort((a, b) => a.t - b.t);
+  const out = [];
+  all.forEach(f => { if (!out.length || out[out.length - 1].flag !== f.flag) out.push(f); });   // one entry per change
+  flagLog.length = 0;
+  out.forEach(f => flagLog.push(f));
+  syncFlagCount = flagLog.length;
+}
+async function syncTick() {
+  const sid = syncSessionId();
+  if (!sid || syncBusy) return;
+  if (sid !== syncSession) { syncSession = sid; syncSinceId = 0; syncPushed = new Set(); syncFlagCount = 0; }
+  syncBusy = true;
+  try {
+    // Upload what this page recorded and the server hasn't seen from us.
+    const laps = [];
+    Object.entries(teamData).forEach(([num, td]) => td.laps.forEach(l => {
+      const k = `${num}|${l.lap}`;
+      if (!syncPushed.has(k) && l.timeSec) laps.push({ num, lap: l.lap, pits: l.pits, data: { ...l, team: td.name, cat: td.cat }, k });
+    }));
+    const flagsNew = flagLog.length !== syncFlagCount;
+    for (let i = 0; i < laps.length || (i === 0 && flagsNew); i += 1500) {
+      const part = laps.slice(i, i + 1500);
+      const res = await fetch(`${SYNC_URL}/sync/push`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: sid, laps: part.map(({ k, ...x }) => x), flags: i === 0 ? flagLog : [] }) });
+      relayUsage(res.headers.get('X-Relay-Today'));
+      if (!res.ok) throw new Error(`push HTTP ${res.status}`);
+      part.forEach(x => syncPushed.add(x.k));
+    }
+    if (flagsNew) syncFlagCount = flagLog.length;
+    // Download what other pages recorded.
+    let added = 0, more = true;
+    while (more) {
+      const res = await fetch(`${SYNC_URL}/sync/pull?session=${encodeURIComponent(sid)}&since=${syncSinceId}`);
+      relayUsage(res.headers.get('X-Relay-Today'));
+      if (!res.ok) throw new Error(`pull HTTP ${res.status}`);
+      const j = await res.json();
+      if (syncSessionId() !== sid) return;   // session changed meanwhile
+      added += syncMerge(j.laps || []);
+      syncMergeFlags(j.flags);
+      syncSinceId = j.maxId || syncSinceId;
+      more = j.more;
+    }
+    if (added) { rebuildGapHistory(); saveToStorage(); }
+    syncStatus(`✓ ${eventClock(Date.now(), { second: '2-digit' })}${added ? ` (+${added} teams updated)` : ''}`, '#4ade80');
+  } catch (e) {
+    console.warn('Sync failed:', e);
+    syncStatus('offline — retrying', '#f59e0b');
+  } finally { syncBusy = false; }
+}
+
+// Relay usage: shown in the header; an alert once it passes 50,000 today.
+const RELAY_ALERT = 50000;
+function relayUsage(v) {
+  const n = parseInt(v);
+  if (!Number.isFinite(n)) return;
+  const el = document.getElementById('relay-usage');
+  const over = n >= RELAY_ALERT;
+  if (el) { el.textContent = `Relay: ${n.toLocaleString('en-GB')} today`; el.style.color = over ? '#f87171' : '#666'; el.style.fontWeight = over ? '700' : '400'; }
+  if (!over) return;
+  const day = new Date().toISOString().slice(0, 10);
+  if (!document.getElementById('relay-alert')) {
+    const bar = document.createElement('div');
+    bar.id = 'relay-alert';
+    bar.style.cssText = 'background:#7f1d1d;color:#fecaca;padding:6px 16px;font-size:12px';
+    document.querySelector('header').after(bar);
+  }
+  document.getElementById('relay-alert').innerHTML = `<b>Cloudflare relay: ${n.toLocaleString('en-GB')} requests today</b> — over 50,000 of the free 100,000/day (resets 00:00 UTC). Close online copies you don't need.`;
+  try {
+    if (localStorage.getItem('relay_alert_day') !== day && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification('EWC relay over 50,000 requests today', { body: `${n.toLocaleString('en-GB')} of 100,000 used (resets 00:00 UTC)` });
+      localStorage.setItem('relay_alert_day', day);
+    }
+  } catch (e) {}
+}
+// Ask once for notification permission (for the relay alert) on the first click.
+document.addEventListener('click', () => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {} }, { once: true });
 
 // ── Init ──────────────────────────────────────────────────────
 // Storage (IndexedDB/localStorage/Sheets) is best-effort persistence only.
@@ -4538,6 +4770,8 @@ DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
   }
   fetchData();
   setInterval(fetchData, INTERVAL);
+  setTimeout(syncTick, 8000);            // first sync once the session is known
+  setInterval(syncTick, SYNC_EVERY);
 })();
 </script>
 </body>

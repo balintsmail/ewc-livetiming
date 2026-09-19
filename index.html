@@ -251,6 +251,8 @@
   .ls-fin-pts { width: 22px; text-align: right; color: #4ade80; font-family: monospace; font-weight: 700; }
   .ls-fin-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
   .ls-fin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ddd; }
+  .ls-ms-mode { display: flex; align-items: center; gap: 6px; margin: -2px 0 10px; }
+  .ls-ms-mode .team-toggle.on { border-color: #3b82f6; background: #3b82f622; color: #93c5fd; }
   .ls-ms-col { flex: 0 0 210px; width: 210px; display: flex; flex-direction: column; min-width: 0; }
   .ls-ms-head { font-size: 11px; font-weight: 700; color: #90b4d6; text-align: center; padding: 2px 0 4px; }
   .ls-ms-list { width: auto; flex: 1 1 auto; }
@@ -546,6 +548,11 @@
     <h3>Scenario per milestone — drag teams into the running order @8h, @16h and at the finish; championship recalculates →
       <span id="ls-ms-status" style="float:right;font-size:12px;font-weight:600"></span>
     </h3>
+    <div class="ls-ms-mode">
+      <button class="team-toggle" id="ls-ms-mode-custom" onclick="lsSetMsMode('custom')">Custom order</button>
+      <button class="team-toggle" id="ls-ms-mode-live" onclick="lsSetMsMode('live')">Order by live timing</button>
+      <span id="ls-ms-mode-note" style="font-size:11px;color:#666"></span>
+    </div>
     <div class="ls-scenario-row">
       <div class="ls-ms-col"><div class="ls-ms-head">@8h</div><div id="ls-ms-h8" class="ls-finish-list ls-ms-list"></div></div>
       <div class="ls-ms-col"><div class="ls-ms-head">@16h</div><div id="ls-ms-h16" class="ls-finish-list ls-ms-list"></div></div>
@@ -1768,7 +1775,6 @@ function renderLapTimesTimeChart(active) {
   if (tw) { xMin = tw.min; xMax = tw.max; }
 
   // Pit stop dotted lines (like the top chart), positioned by clock time
-  const maxStint = parseInt(document.getElementById('max-stint-input')?.value) || 30;
   const lapPitLabelsTime = [];
 
   active.forEach(num => {
@@ -1791,23 +1797,19 @@ function renderLapTimesTimeChart(active) {
       });
     });
 
-    // Future pit prediction
-    const curStint = stints[stints.length - 1] || [];
-    const lastLapEntry = td.laps.length ? td.laps[td.laps.length - 1] : null;
-    const lapsLeft = Math.max(0, maxStint - curStint.length);
-    const lastT = lastLapEntry ? (lastLapEntry.tsMs || tsToMs(lastLapEntry.ts)) : null;
-    if (lapsLeft > 0 && lastT) {
-      const avgPace = stintAvgPace(curStint) || 145;
-      const predT = lastT + lapsLeft * avgPace * 1000;
-      const pitLap = lastLapEntry.lap + lapsLeft;
-      lapPitLabelsTime.push({ x: predT, label: `L${pitLap}`, col });
+    // Forecast pit stops: the same forecast as the Stints tab's first chart
+    // (each team's stint laps + predicted lap time, first stint 2 laps short,
+    // pit stop loss), so both charts show the same stops.
+    const fNow = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+    pfForecast(num, pfRaceWindow(), fNow).fut.forEach((p, k) => {
+      lapPitLabelsTime.push({ x: p.t, label: `L${p.lap}`, col });
       datasets.push({
-        type: 'line', label: `_pit_time_${num}`,
-        data: [{ x: predT, y: yMin }, { x: predT, y: yMax }],
+        type: 'line', label: `_pit_time_${num}_${k}`,
+        data: [{ x: p.t, y: yMin }, { x: p.t, y: yMax }],
         borderColor: col, borderWidth: 1.5, borderDash: [5, 4],
         pointRadius: 0, fill: false, parsing: false, tension: 0,
       });
-    }
+    });
   });
 
   const lapPitLabelPluginTime = {
@@ -1948,9 +1950,12 @@ function updateLapHistory(data) {
     const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
     const firstSeen = prevLapCount[num] === undefined;
 
-    // Detect new pit stop → start a new stint
+    // Detect new pit stop → start a new stint. If the stop was already picked
+    // up from its out-lap (the feed's pit counter lagged, e.g. a transponder
+    // problem), the late counter step doesn't start another one.
     if (!firstSeen && pitCount > (prevPitCount[num] || 0)) {
-      teamData[num].stints.push([]);
+      if (teamData[num].pitAdj > 0) teamData[num].pitAdj--;
+      else teamData[num].stints.push([]);
     }
     prevPitCount[num] = pitCount;
 
@@ -2012,8 +2017,20 @@ function updateLapHistory(data) {
       if (timeSec === null || teamData[num].laps.some(l => l.timeStr === lastLapStr)) {
         deferLap = true;
       } else {
+        const sec = readSectors(r, timeSec, num, lastLapStr);
+        // Out-lap without a pit counter step: the pit lane is in S1, so an S1
+        // 25 s+ over normal is a stop. Start the new stint here and remember
+        // the feed owes us one counter step (pitAdj). Not after a red flag:
+        // the restart from the pit lane also gives a huge S1.
+        const tdn = teamData[num], cur = tdn.stints[tdn.stints.length - 1];
+        const redRecent = flagPeriods(FLAG_RED).some(p => p.end > feedNowMs - 15 * 60000);
+        if (sec.s1 != null && sec.s1 > pitTypical.s1 + 25 && cur.length >= 3 && !redRecent) {
+          tdn.stints.push([]);
+          tdn.pitAdj = (tdn.pitAdj || 0) + 1;
+          console.log(`#${num}: pit stop detected from out-lap L${lapCount} (S1 ${sec.s1}) before the feed's pit counter`);
+        }
         addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st,
-                      rider: riderByNum[num] || '', pits: pitCount, ...readSectors(r, timeSec, num, lastLapStr) });
+                      rider: riderByNum[num] || '', pits: pitCount + (tdn.pitAdj || 0), ...sec });
       }
     }
 
@@ -2614,12 +2631,30 @@ function computePits(num, win) {
       time = inL.timeSec + outL.timeSec - 2 * pace;
       est = true;
     }
+    // Manual correction for this stop (e.g. an extra lap caught in it), saved
+    // on the team record with the session. Click a pit bar to set it.
+    const adj = td.pitAdjust?.[inL.lap] || 0;
+    if (time != null && adj) time += adj;
     pits.push({ n: pits.length + 1, inLap: inL.lap, outLap: outL.lap, inS3: inL.s3 ?? null, outS1: outL.s1 ?? null,
-                base, time: time != null ? +time.toFixed(3) : null, est,
+                base, adj, time: time != null ? +time.toFixed(3) : null, est,
                 riderIn: inL.rider || '', riderOut: outL.rider || '', tsMs: inL.tsMs || null });
   }
   td.pits = pits;
   return pits;
+}
+
+function pitSetAdjust(num, inLap) {
+  const td = teamData[num];
+  if (!td) return;
+  const cur = td.pitAdjust?.[inLap] || 0;
+  const v = prompt(`#${num} pit stop after lap ${inLap}: correction in seconds (e.g. -115; 0 removes it)`, cur);
+  if (v == null) return;
+  const n = parseFloat(String(v).replace(',', '.'));
+  if (!Number.isFinite(n)) return;
+  td.pitAdjust = td.pitAdjust || {};
+  if (n) td.pitAdjust[inLap] = n; else delete td.pitAdjust[inLap];
+  saveToStorage();
+  renderPitForecast();
 }
 
 function renderPitGrid(win) {
@@ -2639,13 +2674,14 @@ function renderPitGrid(win) {
       const sur = n => saShortName(n).replace(/\s\S\.$/, '');   // "KOVÁCS B." → "KOVÁCS"
       const change = p.riderIn && p.riderOut && p.riderIn !== p.riderOut
         ? `${sur(p.riderIn)} → ${sur(p.riderOut)}` : sur(p.riderOut || p.riderIn);
-      const how = p.base != null
+      const how = (p.base != null
         ? `In-lap last sector ${p.inS3.toFixed(3)} + out-lap S1 ${p.outS1.toFixed(3)} = ${p.base.toFixed(3)} − ${pitTypical.s1} − ${pitTypical.s3}`
-        : 'No sectors: in-lap + out-lap − 2 × race pace (estimate)';
-      return `<div class="sa-stint${p.est ? ' pit-est' : ''}${slow ? ' pit-slow' : ''}" title="${saOrdinal(p.n)} pit stop · laps ${p.inLap}→${p.outLap} · ${change}
+        : 'No sectors: in-lap + out-lap − 2 × race pace (estimate)') + (p.adj ? ` ${p.adj > 0 ? '+' : '−'} ${Math.abs(p.adj)} (correction)` : '')
+        + ' · click to set a correction';
+      return `<div class="sa-stint${p.est ? ' pit-est' : ''}${slow ? ' pit-slow' : ''}" style="cursor:pointer" onclick="pitSetAdjust('${num}', ${p.inLap})" title="${saOrdinal(p.n)} pit stop · laps ${p.inLap}→${p.outLap} · ${change}
 ${how} = ${f1(p.time)}">
         <div class="sa-lbl"><b>${saOrdinal(p.n)}</b> L${p.inLap} · ${change}</div>
-        <div class="sa-track"><div class="sa-bar" style="width:${w.toFixed(1)}%;background:${col}">${p.time != null ? p.time.toFixed(1) : '?'}${p.est ? '*' : ''}</div></div>
+        <div class="sa-track"><div class="sa-bar" style="width:${w.toFixed(1)}%;background:${col}">${p.adj ? '✎ ' : ''}${p.time != null ? p.time.toFixed(1) : '?'}${p.est ? '*' : ''}</div></div>
       </div>`;
     }).join('');
     const nm = td?.name || teamNameByNum[num] || '';
@@ -3732,22 +3768,60 @@ function lsInitMsOrder() {
     lsMsOrder[m.key] = [...order, ...lsFinishOrder.filter(t => !order.includes(t))];
   });
 }
-function lsMsPos(m, team) { const i = lsMsOrder[m.key].indexOf(team); return i < 0 ? 99 : i; }
+// Mode: 'custom' = the dragged orders; 'live' = every milestone uses the
+// team's current SST class position from live timing (updated every poll).
+const LS_MS_MODE_KEY = 'ls_ms_mode_v1';
+let lsMsMode = 'custom';
+try { lsMsMode = localStorage.getItem(LS_MS_MODE_KEY) === 'live' ? 'live' : 'custom'; } catch (e) {}
+function lsSetMsMode(mode) {
+  lsMsMode = mode;
+  try { localStorage.setItem(LS_MS_MODE_KEY, mode); } catch (e) {}
+  lsRenderMsLists(); lsRenderMsChart();
+}
+// Live SST class position (1-based) of a championship team, or null if it
+// isn't in the feed.
+function lsLiveClassPos(team) {
+  const key = lsNorm(team);
+  if (lsLivePosMap[key]) return lsLivePosMap[key];
+  for (const k in lsLivePosMap) {
+    if (k && (k.includes(key.slice(0, 8)) || key.includes(k.slice(0, 8)))) return lsLivePosMap[k];
+  }
+  return null;
+}
+function lsMsList(m) {
+  if (lsMsMode !== 'live') return lsMsOrder[m.key];
+  const cur = lsMsOrder[m.key];
+  return cur.slice().sort((a, b) => (lsLiveClassPos(a) ?? 999) - (lsLiveClassPos(b) ?? 999) || cur.indexOf(a) - cur.indexOf(b));
+}
+// 0-based position for the points: live mode uses the real class position
+// (another SST team ahead on track counts), custom mode the list position.
+function lsMsPos(m, team) {
+  if (lsMsMode === 'live') { const p = lsLiveClassPos(team); return p ? p - 1 : 99; }
+  const i = lsMsOrder[m.key].indexOf(team); return i < 0 ? 99 : i;
+}
 function lsMsResult(row) {
   const parts = { q: lsPartsFor(row, 99).q };
   LS_MS.forEach(m => parts[m.key] = m.pts[lsMsPos(m, row.team)] || 0);
   return lsScenarioFromParts(row, parts);
 }
 function lsRenderMsLists() {
+  const live = lsMsMode === 'live';
+  document.getElementById('ls-ms-mode-custom')?.classList.toggle('on', !live);
+  document.getElementById('ls-ms-mode-live')?.classList.toggle('on', live);
+  const note = document.getElementById('ls-ms-mode-note');
+  if (note) note.textContent = live
+    ? (Object.keys(lsLivePosMap).length ? 'SST class positions from live timing, updated every 5 s · drag is off' : 'No SST positions in the live feed yet')
+    : 'Drag teams to set each order';
   LS_MS.forEach(m => {
     const box = document.getElementById(m.box);
     if (!box) return;
-    box.innerHTML = lsMsOrder[m.key].map((team, i) => {
+    box.innerHTML = lsMsList(m).map((team, i) => {
       const row = LS_SEED.find(r => r.team === team);
       const us = team === LS_US;
-      return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="true" data-team="${encodeURIComponent(team)}" title="${team}">
-        <span class="ls-fin-pos">P${i + 1}</span>
-        <span class="ls-fin-pts" title="${m.label} P${i + 1}">${m.pts[i] || 0}</span>
+      const p0 = live ? lsMsPos(m, team) : i;
+      return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="${!live}" data-team="${encodeURIComponent(team)}" title="${team}"${live ? ' style="cursor:default"' : ''}>
+        <span class="ls-fin-pos">${p0 < 99 ? 'P' + (p0 + 1) : '—'}</span>
+        <span class="ls-fin-pts" title="${m.label} ${p0 < 99 ? 'P' + (p0 + 1) : 'not running'}">${m.pts[p0] || 0}</span>
         <span class="ls-fin-dot" style="background:${lsColor(row)}"></span>
         <span class="ls-fin-name">${team}</span>
       </div>`;
@@ -4086,6 +4160,9 @@ async function fetchData() {
     lsBuildLivePosMap();
     if (lsInRaceMode && document.getElementById('tab-livestanding').classList.contains('active')) {
       lsRenderTopInRace();
+    }
+    if (lsMsMode === 'live' && document.getElementById('tab-livestanding').classList.contains('active')) {
+      lsRenderMsLists(); lsRenderMsChart();
     }
     if (document.getElementById('tab-qualifying').classList.contains('active')) renderQualifying();
 

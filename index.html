@@ -1333,35 +1333,46 @@ function renderCharts() {
 // ── Gap chart ─────────────────────────────────────────────────
 // Use gapHistory + lap time fallback for missing gaps
 // gap = other.gap1st - ref.gap1st  (negative = other is ahead of us)
-function calcRealGap(numOther, numRef) {
-  const otherHist = gapHistory[numOther] || [];
-  const refHist   = gapHistory[numRef]   || [];
-  const otherLaps = teamData[numOther]?.laps || [];
-  const refLaps   = teamData[numRef]?.laps   || [];
-
-  const result = [];
-  let lastKnownGap = 0; // start at 0 — accumulate from first lap
-
-  for (const pt of otherHist) {
-    const refPt = refHist.reduce((best, r) =>
-      Math.abs(r.lap - pt.lap) < Math.abs(best.lap - pt.lap) ? r : best,
-      refHist[0] || { lap: 0, gap: null, t: null }
-    );
-    const refGap = refPt?.gap ?? null;
-    const xVal = pt.t || pt.lap; // use timestamp if available, else lap
-
-    if (pt.gap !== null && refGap !== null) {
-      lastKnownGap = +(pt.gap - refGap).toFixed(3);
-      result.push({ x: pt.lap, y: lastKnownGap, t: xVal });
-    } else {
-      const otherLap = otherLaps.find(l => l.lap === pt.lap);
-      const refLap   = refLaps.find(l => l.lap === pt.lap);
-      if (otherLap?.timeSec && refLap?.timeSec) {
-        lastKnownGap = +(lastKnownGap + (otherLap.timeSec - refLap.timeSec)).toFixed(3);
-        result.push({ x: pt.lap, y: lastKnownGap, t: xVal });
-      }
+// Race time at the end of each lap: the sum of the lap times (exact to the
+// thousandth, pit stops included). A missing lap (e.g. a transponder miss) is
+// bridged with the lap crossing timestamps, and the sum is re-anchored to the
+// crossing time whenever it drifts, so a wrong lap time can't skew the gap.
+// A bike first seen mid-race starts from its crossing time since the start.
+function raceTimeByLap(num) {
+  const laps = (teamData[num]?.laps || []).filter(l => l.timeSec).slice().sort((a, b) => a.lap - b.lap);
+  const out = new Map();
+  let T = null, prev = null;
+  const start = pfRaceWindow().start;
+  laps.forEach(l => {
+    if (prev && l.lap === prev.lap + 1) T += l.timeSec;
+    else if (prev && l.tsMs && prev.tsMs) T += (l.tsMs - prev.tsMs) / 1000;
+    else if (!prev && l.lap === 1) T = l.timeSec;
+    else if (!prev && l.tsMs) T = (l.tsMs - start) / 1000;
+    else return;
+    // Sanity check against the crossing time the page saw (feed clock, polled
+    // every 5 s, so it's 0–5 s after the real crossing). A wrong lap time (e.g.
+    // around a pit stop) makes the sum drift; re-anchor when it does.
+    if (l.tsMs) {
+      const seen = (l.tsMs - start) / 1000;
+      if (T > seen + 1 || T < seen - 8) T = seen - 2.5;
     }
-  }
+    out.set(l.lap, { T, t: l.tsMs || null });
+    prev = l;
+  });
+  return out;
+}
+
+// Gap to the reference bike at each lap both completed: the difference of
+// their race times at that lap. Negative = ahead of the reference.
+// (The feed's class-gap column isn't used: during the race it has shown 0.000
+// for several bikes at once, which would pin every gap to zero.)
+function calcRealGap(numOther, numRef) {
+  const o = raceTimeByLap(numOther), r = raceTimeByLap(numRef);
+  const result = [];
+  [...o.keys()].sort((a, b) => a - b).forEach(lap => {
+    const v = o.get(lap), rv = r.get(lap);
+    if (rv) result.push({ x: lap, y: +(v.T - rv.T).toFixed(3), t: v.t });
+  });
   return result;
 }
 
@@ -1411,16 +1422,8 @@ function recalibrateLapTimestamps() {
 // ── Rebuild gap history from lap times ───────────────────────
 function rebuildGapHistory() {
   Object.keys(gapHistory).forEach(k => delete gapHistory[k]);
-  Object.values(teamData).forEach(td => {
-    td.laps.forEach(l => { l.gap1st = null; });
-    td.latestGap1st = null;
-  });
-  // Reset all stored gap1st values — they may be stale/wrong
-  // gap chart will rebuild from lap time differences (cumulative)
-  // and new live laps will bring correct category gaps going forward
+  // The gap chart works from race times (calcRealGap), not from these.
   Object.entries(teamData).forEach(([num, td]) => {
-    td.laps.forEach(l => { l.gap1st = null; });
-    td.latestGap1st = null;
     gapHistory[num] = td.laps.map(l => ({
       lap: l.lap,
       gap: null,
@@ -2071,6 +2074,21 @@ function buildStintFilterBar() {
 }
 
 // ── Stint rendering ───────────────────────────────────────────
+// Laps in a stint, counted by lap NUMBER: from the lap after the previous
+// stint's last lap to this stint's last lap. A lap the feed missed (e.g. the
+// transponder not reading at a pit stop) still counts, so the stint length is
+// the real one even when fewer laps were recorded.
+function stintLapCount(stints, idx) {
+  const st = stints[idx];
+  if (!st || !st.length) return 0;
+  const last = st[st.length - 1].lap;
+  for (let j = idx - 1; j >= 0; j--) {
+    const p = stints[j];
+    if (p && p.length) return last - p[p.length - 1].lap;
+  }
+  return last - (st[0].lap <= 5 ? 1 : st[0].lap) + 1;   // first stint: from lap 1
+}
+
 function stintAvgPace(stint) {
   if (!stint.length) return null;
   const best = Math.min(...stint.map(l => l.timeSec).filter(Boolean));
@@ -2087,7 +2105,7 @@ function renderStints() {
   // Active stint per team: laps done (solid, team colour, count inside the bar)
   // and a dotted box to the team's planned stint end (its forecast stint laps).
   const labels  = active.map(n => `#${n}`);
-  const done    = active.map(n => { const s = teamData[n].stints; return (s[s.length-1]||[]).length; });
+  const done    = active.map(n => { const s = teamData[n].stints; return stintLapCount(s, s.length - 1); });
   const pfWin = pfRaceWindow();
   const planned = active.map(n => pfForecast(n, pfWin, nowMs).curPlan);   // first stint: 2 laps shorter
   const colors  = active.map(n => colorForTeam(n));
@@ -2159,7 +2177,7 @@ function renderStints() {
     const cur = stints[stints.length - 1] || [];
     const col = colorForTeam(num);
     const stintsDone = stints.length - 1;
-    const curLen = cur.length;
+    const curLen = stintLapCount(stints, stints.length - 1);
     const lapsLeft = Math.max(0, maxStint - curLen);
     const avg = stintAvgPace(cur);
     const pitInSec = avg !== null ? lapsLeft * avg : null;
@@ -2170,7 +2188,7 @@ function renderStints() {
     const remClass = pct >= 0.85 ? 'pit-soon' : pct >= 0.6 ? 'pit-mid' : 'pit-ok';
 
     const history = stints.slice(0,-1).map((s,i) =>
-      `<span style="margin-right:6px">${i+1}:<b>${s.length}</b></span>`).join(' ');
+      `<span style="margin-right:6px">${i+1}:<b>${stintLapCount(stints, i)}</b></span>`).join(' ');
 
     return `<tr>
       <td style="color:${col};font-weight:700">#${num} <span style="color:#666;font-weight:400;font-size:11px">${td.name.slice(0,18)}</span></td>
@@ -2225,14 +2243,14 @@ function renderSstStintTable() {
     const col = colorForTeam(num);
 
     const cells = stints.map((s, idx) => {
-      const len = s.length;
+      const len = stintLapCount(stints, idx);
       const counted = isStintCounted(num, idx, len);
       const style = counted ? 'color:#ccc' : 'color:#555;text-decoration:line-through';
       return `<span onclick="toggleStintCount('${num}',${idx})" style="cursor:pointer;padding:2px 7px;display:inline-block;${style}" title="Click to ${counted ? 'exclude' : 'include'}">${len}</span>`;
     }).join(' ');
 
     const countedLens = stints
-      .map((s, idx) => ({ len: s.length, idx }))
+      .map((s, idx) => ({ len: stintLapCount(stints, idx), idx }))
       .filter(({ len, idx }) => isStintCounted(num, idx, len))
       .map(({ len }) => len);
     const prediction = countedLens.length
@@ -2348,7 +2366,7 @@ const PF_DEFAULT_STINT = 26, FIRST_STINT_SHORT = 2;
 // the first stint counts as its length + 2, i.e. as a full tank.
 function pfAvgStint(num) {
   const stints = (teamData[num]?.stints || []).slice(0, -1);
-  const lens = stints.map((st, i) => ({ len: st.length, i })).filter(x => isStintCounted(num, x.i, x.len))
+  const lens = stints.map((st, i) => ({ len: stintLapCount(stints, i), i })).filter(x => isStintCounted(num, x.i, x.len))
     .map(x => x.len + (x.i === 0 ? FIRST_STINT_SHORT : 0));
   return lens.length ? { avg: lens.reduce((a, b) => a + b, 0) / lens.length, n: lens.length } : null;
 }
@@ -2385,7 +2403,7 @@ function pfForecast(num, win, nowMs) {
   let t, lap;
   if (laps.length) {
     const last = laps[laps.length - 1];
-    const cur = ((td.stints || [[]]).slice(-1)[0] || []).filter(l => (l.tsMs || 0) >= win.start).length;
+    const cur = stintLapCount(td.stints || [[]], (td.stints || [[]]).length - 1);
     const left = Math.max(0, curPlan - cur);
     t = Math.max(last.tsMs + left * pace * 1000, left ? 0 : nowMs);
     lap = last.lap + left;
@@ -2724,8 +2742,8 @@ function saStintRows(num, win, nowMs) {
     const laps = st.filter(inWin);
     const active = running && idx === all.length - 1;
     if (!laps.length && !(active && rows.length)) return;
-    rows.push({ laps, active, len: laps.length, rider: laps.length ? saRiderOf(laps) : saRiderOf(all[idx - 1] || []),
-                odd: !active && !isStintCounted(num, idx, laps.length) });
+    rows.push({ laps, active, len: laps.length ? stintLapCount(all, idx) : 0, rider: laps.length ? saRiderOf(laps) : saRiderOf(all[idx - 1] || []),
+                odd: !active && !isStintCounted(num, idx, stintLapCount(all, idx)) });
   });
   return rows;
 }
@@ -2773,6 +2791,19 @@ const pointValueLabels = {
     ctx.restore();
   }
 };
+// Visible teams side by side: the 1st visible team stays put, the 2nd moves
+// 18 px right, the 3rd 36 px… so points on the same stint don't overlap.
+const spreadPoints = {
+  id: 'spreadPoints',
+  afterDatasetsUpdate(chart) {
+    let k = 0;
+    chart.data.datasets.forEach((ds, i) => {
+      if (!chart.isDatasetVisible(i)) return;
+      const dx = 18 * k++;
+      chart.getDatasetMeta(i).data.forEach(pt => { pt.x += dx; });
+    });
+  }
+};
 const lineCharts = {};
 function drawTeamLines(key, canvasId, nums, seriesOf, opts) {
   const canvas = document.getElementById(canvasId);
@@ -2789,13 +2820,13 @@ function drawTeamLines(key, canvasId, nums, seriesOf, opts) {
   lineCharts[key] = new Chart(canvas, {
     type: 'line',
     data: { datasets },
-    plugins: [pointValueLabels],
+    plugins: [spreadPoints, pointValueLabels],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       layout: { padding: { top: 14, right: 10 } },
       interaction: { mode: 'nearest', intersect: true },
       scales: {
-        x: { type: 'linear', min: 0.7, max: maxX + 0.3, ticks: { stepSize: 1, color: '#888', callback: v => Number.isInteger(v) ? saOrdinal(v) : '' },
+        x: { type: 'linear', min: 0.7, max: maxX + 0.6, ticks: { stepSize: 1, color: '#888', callback: v => Number.isInteger(v) ? saOrdinal(v) : '' },
              title: { display: true, text: opts.xTitle, color: '#666' }, grid: { color: '#1c1c1c' } },
         y: { ticks: { color: '#888' }, title: { display: true, text: opts.yTitle, color: '#666' }, grid: { color: '#1c1c1c' }, grace: '8%' },
       },

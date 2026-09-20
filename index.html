@@ -400,6 +400,10 @@
       <input type="range" id="gap-pace-laps" min="3" max="40" step="1" value="12" oninput="gapPaceLaps(this.value)">
       <input type="number" id="gap-pace-laps-num" min="3" max="200" step="1" value="12" oninput="gapPaceLaps(this.value)"> laps
       <span style="color:#555">· dotted lines project the gap to the finish at that pace</span>
+      <span class="sep" style="width:1px;height:16px;background:#333"></span>
+      <label class="pf-switch" title="Off: set our pace by hand for the prediction"><input type="checkbox" id="gap-ourpace-auto" checked onchange="gapOurPaceAuto(this.checked)"><span class="pf-slider"></span> Our pace auto</label>
+      <input type="range" id="gap-ourpace" min="108" max="140" step="0.1" value="116" oninput="gapSetOurPace(this.value)">
+      <b id="gap-ourpace-v" style="color:#cbd5e1;font-family:monospace;min-width:56px">—</b>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="font-size:11px;color:#555;white-space:nowrap">Min</span>
@@ -1491,6 +1495,24 @@ const GAP_PACE_KEY = 'gap_pace_laps_v1';
 let gapPaceLapsN = 12;
 try { const v = parseInt(localStorage.getItem(GAP_PACE_KEY)); if (v >= 3) gapPaceLapsN = v; } catch (e) {}
 function gapPaceN() { return gapPaceLapsN; }
+// Our (the reference team's) pace for the prediction: from the last N normal
+// laps, or set by hand with the slider.
+const GAP_OURPACE_KEY = 'gap_ourpace_v1';
+let gapOurPace = null;   // null = auto
+try { const v = parseFloat(localStorage.getItem(GAP_OURPACE_KEY)); if (v > 0) gapOurPace = v; } catch (e) {}
+function gapSaveOurPace() {
+  try { if (gapOurPace) localStorage.setItem(GAP_OURPACE_KEY, String(gapOurPace)); else localStorage.removeItem(GAP_OURPACE_KEY); } catch (e) {}
+}
+function gapSetOurPace(v) {
+  gapOurPace = parseFloat(v) || null;
+  const sw = document.getElementById('gap-ourpace-auto');
+  if (sw) sw.checked = false;
+  gapSaveOurPace(); renderGapChart();
+}
+function gapOurPaceAuto(on) {
+  gapOurPace = on ? null : (parseFloat(document.getElementById('gap-ourpace')?.value) || null);
+  gapSaveOurPace(); renderGapChart();
+}
 function gapPaceLaps(v) {
   const n = parseInt(v);
   if (!(n >= 3)) return;
@@ -1586,7 +1608,16 @@ function renderGapChart() {
   // drops anything still far off (safety car, a slow lap after a problem).
   const nLaps = gapPaceN();
   const pace12 = num => racePace(normalLaps(num).slice(-nLaps));
-  const refPace12 = pace12(refTeam);
+  const refPace12 = gapOurPace || pace12(refTeam);
+  // Keep the slider and its label in step with what's being used.
+  const opSl = document.getElementById('gap-ourpace'), opV = document.getElementById('gap-ourpace-v');
+  if (opSl && refPace12) {
+    opSl.value = Math.min(Math.max(refPace12, +opSl.min), +opSl.max);   // auto pace, or the one set by hand
+    opV.textContent = secToStr(+opSl.value).replace(/(\.\d)\d\d$/, '$1') + (gapOurPace ? ' (set)' : ' (auto)');
+    opV.style.color = gapOurPace ? '#fbbf24' : '#cbd5e1';
+    const sw = document.getElementById('gap-ourpace-auto');
+    if (sw) sw.checked = !gapOurPace;
+  }
   const raceEnd = pfRaceWindow().end;
   const preds = [];
   const datasets = active

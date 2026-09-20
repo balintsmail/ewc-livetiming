@@ -1673,18 +1673,12 @@ function renderGapChart() {
       const col = colorForTeam(num);
       const td = teamData[num];
       const pts = calcRealGap(num, refTeam).filter(p => p.t).map(p => ({ x: p.t, y: p.y, lap: p.x, tOther: p.tOther }));
-      // Dotted line from the gap as it stands NOW: each bike's race time at
-      // its own current lap, with the one that's behind on laps projected
-      // forward at its own pace to the other's lap. A bike that hasn't
-      // crossed the line for 15 minutes (stopped or retired) gets no line.
-      const p12 = pace12(num), last = pts[pts.length - 1];
-      const theirLast = (td?.laps || []).slice(-1)[0], ourLast = (teamData[refTeam]?.laps || []).slice(-1)[0];
-      const running = theirLast && nowMs - theirLast.tsMs < 15 * 60000;
-      const theirT = theirLast && raceTimeByLap(num).get(theirLast.lap)?.T;
-      const ourT = ourLast && raceTimeByLap(refTeam).get(ourLast.lap)?.T;
-      if (last && p12 && refPace12 && running && theirT != null && ourT != null && raceEnd > nowMs) {
-        const dL = ourLast.lap - theirLast.lap;        // + = they are laps behind us
-        const gapNow = +((theirT + Math.max(dL, 0) * p12) - (ourT + Math.max(-dL, 0) * refPace12)).toFixed(1);
+      // Dotted line from the gap as it stands NOW (currentGapTo also counts
+      // time a bike is standing in the pits).
+      const p12 = pace12(num);
+      const cg = currentGapTo(num, refTeam, nowMs, nLaps);
+      if (cg && p12 && refPace12 && raceEnd > nowMs) {
+        const gapNow = +cg.gap.toFixed(1);
         const rate = (p12 - refPace12) / refPace12;   // seconds of gap per second of racing
         // Where the dotted line crosses 0: the predicted change of position.
         if (rate && gapNow) {
@@ -1989,12 +1983,20 @@ function twReset(key = 'lap') { twStates[key] = { from: 0, to: TW_DEFAULT, follo
 function currentGapTo(num, refNum, nowMs, nLaps) {
   const td = teamData[num], ref = teamData[refNum];
   const theirLast = (td?.laps || []).slice(-1)[0], ourLast = (ref?.laps || []).slice(-1)[0];
-  if (!theirLast || !ourLast || nowMs - theirLast.tsMs > 15 * 60000) return null;
+  // Over 45 minutes without crossing the line: out of the race, no gap.
+  if (!theirLast || !ourLast || nowMs - theirLast.tsMs > 45 * 60000) return null;
   const p = racePace(normalLaps(num).slice(-nLaps)), rp = racePace(normalLaps(refNum).slice(-nLaps));
   const theirT = raceTimeByLap(num).get(theirLast.lap)?.T, ourT = raceTimeByLap(refNum).get(ourLast.lap)?.T;
   if (!p || !rp || theirT == null || ourT == null) return null;
   const dL = ourLast.lap - theirLast.lap;
-  return { gap: (theirT + Math.max(dL, 0) * p) - (ourT + Math.max(-dL, 0) * rp), pace: p, refPace: rp };
+  let gap = (theirT + Math.max(dL, 0) * p) - (ourT + Math.max(-dL, 0) * rp);
+  // Standing in the pits right now (or crawling): everything beyond a normal
+  // lap since their last crossing is time we have already taken off them.
+  const theirIdle = (nowMs - theirLast.tsMs) / 1000 - p;
+  const ourIdle = (nowMs - ourLast.tsMs) / 1000 - rp;
+  if (theirIdle > 0) gap += theirIdle;
+  if (ourIdle > 0) gap -= ourIdle;
+  return { gap, pace: p, refPace: rp, inPit: theirIdle > 30 };
 }
 
 // "Catch-up lines": for every team ahead of us, the lap time they would have to
@@ -2430,7 +2432,13 @@ function stintLastLap(stints, idx) {
 function stintLapCount(stints, idx) {
   const st = stints[idx];
   if (!st || !st.length) return 0;
-  if (idx === stints.length - 1 && Number.isFinite(stints.sincePit)) return stints.sincePit;   // current stint: from timing
+  // Current stint: the feed's own laps-since-pit, unless it disagrees with the
+  // laps we recorded by more than 3 (the feed has counted phantom stops after
+  // a lap-count correction) — then our own crossings win.
+  if (idx === stints.length - 1 && Number.isFinite(stints.sincePit)) {
+    const own = st.length ? st[st.length - 1].lap - (idx ? (stints[idx - 1].slice(-1)[0]?.lap ?? st[0].lap - 1) : st[0].lap - 1) : 0;
+    if (!own || Math.abs(stints.sincePit - own) <= 3) return stints.sincePit;
+  }
   const last = stintLastLap(stints, idx);
   for (let j = idx - 1; j >= 0; j--) {
     const p = stints[j];

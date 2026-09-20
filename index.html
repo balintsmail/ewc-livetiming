@@ -407,10 +407,10 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="font-size:11px;color:#555;white-space:nowrap">Min</span>
-      <input type="range" id="gap-y-min" min="-600" max="0" value="-100" step="10"
+      <input type="range" id="gap-y-min" min="-6000" max="0" value="-6000" step="10"
         style="flex:1;accent-color:#ef4444">
       <input type="number" id="gap-y-min-num" step="10" class="gap-y-num" oninput="gapYFromInput('min', this.value)">
-      <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-100s</span>
+      <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-6000s</span>
       <span style="font-size:11px;color:#555;white-space:nowrap;margin-left:8px">Max</span>
       <input type="range" id="gap-y-max" min="0" max="600" value="60" step="10"
         style="flex:1;accent-color:#22c55e">
@@ -722,6 +722,10 @@ function buildColumnMap(colonnes) {
 // 38 Champion-Hert (us) · 49 Revo-M2 · 27 TRT27 · 41 Dafy-Kaedear ·
 // 25 Team Étoile · 44 Honda No Limits · 9 TEAM TECMAS · 77 Wójcik.
 const DEFAULT_TEAMS = ['38','49','27','41','25','44','9','77'];
+// Out of the race (long stops / retired): in the championship lists, but not
+// selected when a filter first opens. "Top 8" still selects all eight.
+const DEFAULT_OFF = ['49','27','41','25','9'];
+const DEFAULT_ON = DEFAULT_TEAMS.filter(n => !DEFAULT_OFF.includes(n));
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbz5cYKuhRC4vLKTo9lMMTTzvlERIgrP4tQaM0DoraGCdS28WMvMuSEdGeSfkeNGGs79/exec';
 // track which laps already sent: "num-lap" keys
 const sentLaps = new Set();
@@ -738,7 +742,7 @@ const teamData = {};
 // previous lap counts to detect new laps
 const prevLapCount = {};
 // which teams are toggled on
-let activeTeams = new Set(DEFAULT_TEAMS);
+let activeTeams = new Set(DEFAULT_ON);
 
 // Line style for both lap-time charts: smooth (curved) or straight segments
 let lineTension = 0.4;
@@ -1476,12 +1480,22 @@ function rebuildGapHistory() {
 
 // The gap chart has its own team selection (top 8 by default).
 const GAP_TEAMS_KEY = 'gap_teams_v1';
-let gapSel = new Set(DEFAULT_TEAMS);
+let gapSel = new Set(DEFAULT_ON);
 try { const t = JSON.parse(localStorage.getItem(GAP_TEAMS_KEY)); if (Array.isArray(t)) gapSel = new Set(t); } catch (e) {}
 function gapSaveSel() { try { localStorage.setItem(GAP_TEAMS_KEY, JSON.stringify([...gapSel])); } catch (e) {} }
 function gapTeams() { return pfAllNums().filter(n => gapSel.has(n) && teamData[n]); }
+// The SST class top N as it stands in the race right now (plus the reference).
+function sstTopN(n) {
+  const rows = (rawData?.Donnees || [])
+    .filter(r => cleanVal(r[C.cat]) === 'SST' && !isTBike(normNum(cleanVal(r[C.num]))))
+    .map(r => ({ num: normNum(cleanVal(r[C.num])), pos: parseInt(cleanVal(r[C.catPos])) || 99 }))
+    .filter(x => x.pos <= n)
+    .map(x => x.num);
+  return new Set([refTeam, ...rows]);
+}
 function gapSetMode(mode) {
-  gapSel = mode === 'top8' ? new Set(DEFAULT_TEAMS)
+  gapSel = mode === 'sst13' ? sstTopN(13)
+    : mode === 'top8' ? new Set(DEFAULT_TEAMS)
     : mode === 'all' ? new Set(pfAllNums())
     : mode === 'sst' ? new Set(pfAllNums().filter(n => (teamData[n]?.cat || '').toUpperCase() === 'SST'))
     : new Set([refTeam]);
@@ -1543,6 +1557,7 @@ function gapRenderFilter() {
   const bar = document.getElementById('gap-filter');
   if (!bar) return;
   bar.innerHTML = `<button class="team-toggle" onclick="gapSetMode('top8')">Top 8</button>
+    <button class="team-toggle" onclick="gapSetMode('sst13')" title="The SST top 13 as it stands right now, plus us">SST top 13</button>
     <button class="team-toggle" onclick="gapSetMode('sst')">SST</button>
     <button class="team-toggle" onclick="gapSetMode('all')">All</button>
     <button class="team-toggle" onclick="gapSetMode('none')">None</button><span class="sep"></span>` +
@@ -1688,9 +1703,8 @@ function renderGapChart() {
   const maxSlider = document.getElementById('gap-y-max');
   const allGaps = active.filter(n => n !== refTeam).flatMap(n => calcRealGap(n, refTeam).map(p => p.y));
   if (minSlider && !minSlider._userSet) {
-    const dataMin = allGaps.length ? Math.floor(Math.min(...allGaps) / 10) * 10 : -100;
-    minSlider.value = Math.max(-600, Math.min(0, dataMin));
-    document.getElementById('gap-y-min-label').textContent = minSlider.value + 's';
+    minSlider.value = -6000;   // default: the whole field fits, laps down included
+    document.getElementById('gap-y-min-label').textContent = '-6000s';
   }
   if (maxSlider && !maxSlider._userSet) {
     maxSlider.value = 60;
@@ -2521,7 +2535,7 @@ function renderSstStintTable() {
 const FLAG_SC = 7;                       // new feed: 7 = safety car (5 = FCY)
 const RACE_HOURS = 24;
 const PF_TEAMS_KEY = 'pf_teams_v1', PF_LAPS_KEY = 'pf_stint_laps_v1', PF_GLOBAL_KEY = 'pf_globals_v1';
-let pfTeams = new Set(DEFAULT_TEAMS);
+let pfTeams = new Set(DEFAULT_ON);
 let pfLaps = {};                          // { num: laps } — only teams set by slider
 let pfChart = null;
 try { const t = JSON.parse(localStorage.getItem(PF_TEAMS_KEY)); if (Array.isArray(t)) pfTeams = new Set(t); } catch (e) {}
@@ -3017,7 +3031,7 @@ function saStintRows(num, win, nowMs) {
 
 // ── Team selectors for the stint / pit-time line charts (top 8 by default) ──
 const TSEL_KEY = 'tsel_v1';
-const tsel = { sa: new Set(DEFAULT_TEAMS), pit: new Set(DEFAULT_TEAMS) };
+const tsel = { sa: new Set(DEFAULT_ON), pit: new Set(DEFAULT_ON) };
 try { const t = JSON.parse(localStorage.getItem(TSEL_KEY)) || {}; Object.keys(tsel).forEach(k => { if (Array.isArray(t[k])) tsel[k] = new Set(t[k]); }); } catch (e) {}
 function tselSave() { try { localStorage.setItem(TSEL_KEY, JSON.stringify(Object.fromEntries(Object.entries(tsel).map(([k, v]) => [k, [...v]])))); } catch (e) {} }
 function tselMode(key, mode) {
@@ -4214,7 +4228,7 @@ lsMsSetup();
 const Q_RIDERS = ['Blue', 'Yellow', 'Red', 'Green'];
 const Q_RIDER_COLOR = { Blue: '#3b82f6', Yellow: '#facc15', Red: '#ef4444', Green: '#22c55e' };
 const Q_GRID_PTS = [5, 4, 3, 2, 1]; // reg 1.34.6: top 5 of the class on the final grid
-const qSelected = new Set(DEFAULT_TEAMS);
+const qSelected = new Set(DEFAULT_ON);
 let qShowAll = false;
 const teamNameByNum = {}; // car number → team name, from feeds that carry a team column
 const riderByNum = {};    // car number → last rider name seen on track this session
@@ -5173,7 +5187,7 @@ document.addEventListener('click', () => { try { if ('Notification' in window &&
 // ── Init ──────────────────────────────────────────────────────
 // Storage (IndexedDB/localStorage/Sheets) is best-effort persistence only.
 // A failure in any of it must never block the live feed from starting.
-DEFAULT_TEAMS.forEach(n => activeTeams.add(n));
+DEFAULT_ON.forEach(n => activeTeams.add(n));
 (async () => {
   if (TEST_MODE) {
     try {

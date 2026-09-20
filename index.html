@@ -367,6 +367,7 @@
   <div class="chart-card">
     <h3>Lap Times by Clock Time
       <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
+        <label class="pf-switch" title="Dotted line per team ahead: the lap time they'd have to average for us to catch them by 15:00"><input type="checkbox" id="catch-lines" checked onchange="catchLinesToggle(this.checked)"><span class="pf-slider"></span> Catch-up lines</label>
         Avg window:
         <input type="range" id="avg-window-slider-time" min="1" max="22" value="1" step="1"
           style="width:100px;accent-color:#3b82f6"
@@ -734,7 +735,7 @@ const sentLaps = new Set();
 const PALETTE = ['#38bdf8','#fb923c','#4ade80','#f472b6','#a78bfa','#facc15','#34d399','#f87171','#60a5fa','#e879f9'];
 // Aligned with the Spa 2025 colours where they exist: 38 white (us),
 // 49 purple (Revo), 25 yellow (Étoile), 77 blue (Wójcik).
-const FIXED_COLORS = { '38':'#ffffff', '49':'#ab47bc', '27':'#fb923c', '41':'#ef4444', '25':'#fdd835', '44':'#f472b6', '9':'#22d3ee', '77':'#42a5f5' };
+const FIXED_COLORS = { '38':'#ffffff', '49':'#ab47bc', '27':'#fb923c', '41':'#ef4444', '25':'#fdd835', '44':'#f472b6', '9':'#22d3ee', '77':'#42a5f5', '34':'#a855f7' };
 const teamColors = {};
 
 // { num: { name, rider, cat, laps: [{lap, timeSec, timeStr, initials, ts}] } }
@@ -743,6 +744,34 @@ const teamData = {};
 const prevLapCount = {};
 // which teams are toggled on
 let activeTeams = new Set(DEFAULT_ON);
+// Until a team button is clicked, the Charts/Stints selection is us plus the
+// bikes running just ahead of us in our class.
+let chartsSelTouched = false, chartsSelApplied = false;
+const TEAMS_AHEAD = 4;
+function applyAheadSelection() {
+  if (chartsSelTouched || chartsSelApplied || !rawData?.Donnees) return;
+  const us = rawData.Donnees.find(r => normNum(cleanVal(r[C.num])) === DEFAULT_TEAMS[0]);
+  if (!us) return;
+  const cat = cleanVal(us[C.cat]), pos = parseInt(cleanVal(us[C.catPos]));
+  if (!pos) return;
+  const ahead = rawData.Donnees
+    .filter(r => cleanVal(r[C.cat]) === cat && !isTBike(normNum(cleanVal(r[C.num]))))
+    .map(r => ({ num: normNum(cleanVal(r[C.num])), p: parseInt(cleanVal(r[C.catPos])) || 99 }))
+    .filter(x => x.p < pos && x.p >= pos - TEAMS_AHEAD)
+    .map(x => x.num);
+  const sel = new Set([DEFAULT_TEAMS[0], ...ahead]);
+  activeTeams = sel;
+  chartsSelApplied = true;
+  buildTeamFilterBar();
+  renderCharts();
+  // The pit forecast starts on the same teams, unless you've picked your own.
+  let pfStored = null;
+  try { pfStored = localStorage.getItem(PF_TEAMS_KEY); } catch (e) {}
+  if (!pfStored) {
+    pfTeams = new Set(sel);
+    if (document.getElementById('tab-stints').classList.contains('active')) renderPitForecast();
+  }
+}
 
 // Line style for both lap-time charts: smooth (curved) or straight segments
 let lineTension = 0.4;
@@ -1080,6 +1109,7 @@ function buildTeamFilterBar() {
         btn.style.background = col + '22';
         btn.style.color = col;
       }
+      chartsSelTouched = true;   // the selection is yours from now on
       renderCharts();
     };
     bar.appendChild(btn);
@@ -1953,7 +1983,34 @@ function twReset(key = 'lap') { twStates[key] = { from: 0, to: TW_DEFAULT, follo
   });
 })();
 
+// The gap right now between a bike and the reference: each bike's race time at
+// its own current lap, with the one behind on laps projected forward at its own
+// pace. Negative = ahead of the reference. Null if it isn't running.
+function currentGapTo(num, refNum, nowMs, nLaps) {
+  const td = teamData[num], ref = teamData[refNum];
+  const theirLast = (td?.laps || []).slice(-1)[0], ourLast = (ref?.laps || []).slice(-1)[0];
+  if (!theirLast || !ourLast || nowMs - theirLast.tsMs > 15 * 60000) return null;
+  const p = racePace(normalLaps(num).slice(-nLaps)), rp = racePace(normalLaps(refNum).slice(-nLaps));
+  const theirT = raceTimeByLap(num).get(theirLast.lap)?.T, ourT = raceTimeByLap(refNum).get(ourLast.lap)?.T;
+  if (!p || !rp || theirT == null || ourT == null) return null;
+  const dL = ourLast.lap - theirLast.lap;
+  return { gap: (theirT + Math.max(dL, 0) * p) - (ourT + Math.max(-dL, 0) * rp), pace: p, refPace: rp };
+}
+
+// "Catch-up lines": for every team ahead of us, the lap time they would have to
+// average from now for us to be level by the finish, at our own current pace.
+const CATCH_KEY = 'catch_lines_v1';
+let catchLinesOn = true;
+try { catchLinesOn = localStorage.getItem(CATCH_KEY) !== '0'; } catch (e) {}
+function catchLinesToggle(on) {
+  catchLinesOn = on;
+  try { localStorage.setItem(CATCH_KEY, on ? '1' : '0'); } catch (e) {}
+  renderCharts();
+}
+
 function renderLapTimesTimeChart(active) {
+  const catchSw = document.getElementById('catch-lines');
+  if (catchSw) catchSw.checked = catchLinesOn;
   const avgWindow = parseInt(document.getElementById('avg-window-slider-time')?.value) || 10;
   const datasets = [];
 
@@ -2003,7 +2060,7 @@ function renderLapTimesTimeChart(active) {
     });
   });
 
-  const yMin = 112, yMax = 122;   // 1:52 – 2:02
+  const yMin = 112, yMax = 128;   // 1:52 – 2:08
 
   // Fix the x-axis to the session window: start (feed-now − elapsed) to
   // end (start + elapsed + remaining) plus a 5-minute margin. TempsEcoule +
@@ -2069,11 +2126,48 @@ function renderLapTimesTimeChart(active) {
     }
   };
 
+  // One dotted line per team ahead of us: the average lap they'd need for us to
+  // catch them by 15:00 (our pace assumed to hold).
+  const catchNow = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+  const catchEnd = pfRaceWindow().end, catchLeft = (catchEnd - catchNow) / 1000;
+  const catchLines = [];
+  if (catchLinesOn && catchLeft > 60) {
+    active.filter(n => n !== refTeam).forEach(num => {
+      const g = currentGapTo(num, refTeam, catchNow, gapPaceN());
+      if (!g || g.gap >= 0) return;                       // only bikes ahead of us
+      const need = g.refPace * (1 - g.gap / catchLeft);   // their needed average lap
+      if (need >= yMin && need <= yMax) catchLines.push({ num, need, col: colorForTeam(num), behind: -g.gap });
+    });
+  }
+  const catchLinesPlugin = {
+    id: 'catchLines',
+    afterDatasetsDraw(chart) {
+      if (!catchLines.length) return;
+      const { ctx, chartArea: a, scales: { y } } = chart;
+      ctx.save();
+      ctx.setLineDash([7, 5]); ctx.lineWidth = 1.5;
+      ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textBaseline = 'bottom';
+      catchLines.forEach(c => {
+        const py = y.getPixelForValue(c.need);
+        ctx.strokeStyle = c.col;
+        ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+        const txt = `#${c.num} needs ${secToStr(c.need)} avg to be caught (${Math.round(c.behind)}s ahead)`;
+        const w = ctx.measureText(txt).width + 8;
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(10,10,10,0.85)'; ctx.fillRect(a.left + 6, py - 14, w, 13);
+        ctx.fillStyle = c.col; ctx.textAlign = 'left';
+        ctx.fillText(txt, a.left + 10, py - 2);
+        ctx.setLineDash([7, 5]);
+      });
+      ctx.restore();
+    }
+  };
+
   if (lapTimesTimeChart) lapTimesTimeChart.destroy();
   lapTimesTimeChart = new Chart(document.getElementById('chart-laptimes-time'), {
     type: 'scatter',
     data: { datasets },
-    plugins: [sunBands, lapPitLabelPluginTime, redFlagBands],
+    plugins: [sunBands, lapPitLabelPluginTime, redFlagBands, catchLinesPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
       plugins: {
@@ -4522,6 +4616,7 @@ async function fetchData() {
       buildStintFilterBar(); renderStints(); renderPitForecast();
     }
     // Keep the live in-race projection fresh from the feed.
+    applyAheadSelection();
     lsBuildLivePosMap();
     if (lsInRaceMode && document.getElementById('tab-livestanding').classList.contains('active')) {
       lsRenderTopInRace();

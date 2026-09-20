@@ -1980,6 +1980,12 @@ function twReset(key = 'lap') { twStates[key] = { from: 0, to: TW_DEFAULT, follo
 // The gap right now between a bike and the reference: each bike's race time at
 // its own current lap, with the one behind on laps projected forward at its own
 // pace. Negative = ahead of the reference. Null if it isn't running.
+// The feed's own lap count for a bike (it can be ahead of what we recorded).
+function feedLapCount(num) {
+  const r = (rawData?.Donnees || []).find(x => normNum(cleanVal(x[C.num])) === num);
+  const n = r ? parseInt(cleanVal(r[C.laps])) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
 function currentGapTo(num, refNum, nowMs, nLaps) {
   const td = teamData[num], ref = teamData[refNum];
   const theirLast = (td?.laps || []).slice(-1)[0], ourLast = (ref?.laps || []).slice(-1)[0];
@@ -1990,10 +1996,12 @@ function currentGapTo(num, refNum, nowMs, nLaps) {
   if (!p || !rp || theirT == null || ourT == null) return null;
   const dL = ourLast.lap - theirLast.lap;
   let gap = (theirT + Math.max(dL, 0) * p) - (ourT + Math.max(-dL, 0) * rp);
-  // Standing in the pits right now (or crawling): everything beyond a normal
-  // lap since their last crossing is time we have already taken off them.
-  const theirIdle = (nowMs - theirLast.tsMs) / 1000 - p;
-  const ourIdle = (nowMs - ourLast.tsMs) / 1000 - rp;
+  // Standing in the pits right now (or crawling): time since the last crossing
+  // beyond the laps actually completed since then. The feed's lap count covers
+  // laps we failed to record, so those don't look like a stop.
+  const lapsSince = (num_, last) => Math.max(1, (feedLapCount(num_) || last.lap) - last.lap + 1);
+  const theirIdle = (nowMs - theirLast.tsMs) / 1000 - lapsSince(num, theirLast) * p;
+  const ourIdle = (nowMs - ourLast.tsMs) / 1000 - lapsSince(refNum, ourLast) * rp;
   if (theirIdle > 0) gap += theirIdle;
   if (ourIdle > 0) gap -= ourIdle;
   return { gap, pace: p, refPace: rp, inPit: theirIdle > 30 };

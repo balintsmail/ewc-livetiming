@@ -375,14 +375,14 @@
       </span>
     </h3>
     <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes-time"></canvas></div>
-    <div class="tw-bar">
+    <div class="tw-bar" data-tw="lap">
       <div class="tw-track">
         <div class="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
       </div>
       <div class="tw-ticks"></div>
       <div class="tw-info"><span class="tw-label"></span>
-        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
-        <button class="team-toggle" onclick="twReset()">Reset 4 h</button>
+        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked, this.closest('.tw-bar').dataset.tw)"><span class="pf-slider"></span> Follow live</label>
+        <button class="team-toggle" onclick="twReset(this.closest('.tw-bar').dataset.tw)">Reset 4 h</button>
       </div>
     </div>
   </div>
@@ -418,14 +418,14 @@
       <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+60s</span>
     </div>
     <div class="chart-wrap" style="height:680px"><canvas id="chart-gap"></canvas></div>
-    <div class="tw-bar">
+    <div class="tw-bar" data-tw="gap">
       <div class="tw-track">
         <div class="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
       </div>
       <div class="tw-ticks"></div>
       <div class="tw-info"><span class="tw-label"></span>
-        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
-        <button class="team-toggle" onclick="twReset()">Reset 4 h</button>
+        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked, this.closest('.tw-bar').dataset.tw)"><span class="pf-slider"></span> Follow live</label>
+        <button class="team-toggle" onclick="twReset(this.closest('.tw-bar').dataset.tw)">Reset 4 h</button>
       </div>
     </div>
   </div>
@@ -1408,7 +1408,8 @@ function calcRealGap(numOther, numRef) {
   const result = [];
   [...o.keys()].sort((a, b) => a - b).forEach(lap => {
     const v = o.get(lap), rv = r.get(lap);
-    if (rv) result.push({ x: lap, y: +(v.T - rv.T).toFixed(3), t: v.t });
+    // t = when the reference crossed that lap, so the line runs up to now.
+    if (rv) result.push({ x: lap, y: +(v.T - rv.T).toFixed(3), t: rv.t, tOther: v.t });
   });
   return result;
 }
@@ -1619,21 +1620,35 @@ function renderGapChart() {
     if (sw) sw.checked = !gapOurPace;
   }
   const raceEnd = pfRaceWindow().end;
-  const preds = [];
+  const nowMs = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+  const preds = [], crossings = [];
   const datasets = active
     .filter(num => num !== refTeam)
     .map(num => {
       const col = colorForTeam(num);
       const td = teamData[num];
-      const pts = calcRealGap(num, refTeam).filter(p => p.t).map(p => ({ x: p.t, y: p.y, lap: p.x }));
-      // Dotted line from the last common lap: where the gap goes if both keep
-      // the pace of their last 12 laps.
+      const pts = calcRealGap(num, refTeam).filter(p => p.t).map(p => ({ x: p.t, y: p.y, lap: p.x, tOther: p.tOther }));
+      // Dotted line from the gap as it stands NOW: each bike's race time at
+      // its own current lap, with the one that's behind on laps projected
+      // forward at its own pace to the other's lap. A bike that hasn't
+      // crossed the line for 15 minutes (stopped or retired) gets no line.
       const p12 = pace12(num), last = pts[pts.length - 1];
-      if (last && p12 && refPace12 && raceEnd > last.x) {
+      const theirLast = (td?.laps || []).slice(-1)[0], ourLast = (teamData[refTeam]?.laps || []).slice(-1)[0];
+      const running = theirLast && nowMs - theirLast.tsMs < 15 * 60000;
+      const theirT = theirLast && raceTimeByLap(num).get(theirLast.lap)?.T;
+      const ourT = ourLast && raceTimeByLap(refTeam).get(ourLast.lap)?.T;
+      if (last && p12 && refPace12 && running && theirT != null && ourT != null && raceEnd > nowMs) {
+        const dL = ourLast.lap - theirLast.lap;        // + = they are laps behind us
+        const gapNow = +((theirT + Math.max(dL, 0) * p12) - (ourT + Math.max(-dL, 0) * refPace12)).toFixed(1);
         const rate = (p12 - refPace12) / refPace12;   // seconds of gap per second of racing
+        // Where the dotted line crosses 0: the predicted change of position.
+        if (rate && gapNow) {
+          const cross = nowMs - (gapNow / rate) * 1000;
+          if (cross > nowMs && cross <= raceEnd) crossings.push({ num, col, t: cross });
+        }
         preds.push({
           label: `_pred_${num}`,
-          data: [{ x: last.x, y: last.y }, { x: raceEnd, y: +(last.y + rate * (raceEnd - last.x) / 1000).toFixed(1) }],
+          data: [{ x: nowMs, y: gapNow }, { x: raceEnd, y: +(gapNow + rate * (raceEnd - nowMs) / 1000).toFixed(1) }],
           borderColor: col + 'aa', borderWidth: 2, borderDash: [6, 5],
           pointRadius: 0, fill: false, parsing: false, tension: 0,
         });
@@ -1688,17 +1703,55 @@ function renderGapChart() {
   const yMax = parseInt(maxSlider?.value) ?? 60;
   const yRange = Math.max(Math.abs(yMin), yMax);
 
-  const twGap = twRange();
+  const twGap = twRange('gap');
   if (gapChart) gapChart.destroy();
 
   // A dotted line every lap's worth of time (the reference team's race pace),
   // so a gap can be read as "a lap down".
   const refPace = racePace((teamData[refTeam]?.laps || []).filter(l => l.tsMs >= pfRaceWindow().start)) || 116;
   const raceEndMs = pfRaceWindow().end;
+  // Labels where a prediction line reaches 0: when we'd catch that team (or it
+  // catches us), and how many laps of ours that is from now.
+  crossings.sort((a, b) => a.t - b.t);
+  const overtakeLabels = {
+    id: 'overtakeLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { x, y } } = chart;
+      const nowMs = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+      const zero = y.getPixelForValue(0);
+      ctx.save();
+      ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textBaseline = 'middle';
+      crossings.forEach((c, i) => {
+        const px = x.getPixelForValue(c.t);
+        if (px < a.left || px > a.right) return;
+        const laps = Math.max(0, Math.round((c.t - nowMs) / 1000 / (refPace12 || 116)));
+        const txt = `#${c.num} ${eventClock(c.t)} · ${laps} laps`;
+        const w = ctx.measureText(txt).width + 8;
+        const py = zero + 14 + (i % 6) * 13;            // stagger so labels don't overlap
+        ctx.beginPath(); ctx.moveTo(px, zero); ctx.lineTo(px, py); ctx.strokeStyle = c.col + '88'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = 'rgba(10,10,10,0.85)'; ctx.fillRect(px + 3, py - 7, w, 14);
+        ctx.fillStyle = c.col; ctx.textAlign = 'left';
+        ctx.fillText(txt, px + 7, py);
+        ctx.beginPath(); ctx.arc(px, zero, 3, 0, 7); ctx.fillStyle = c.col; ctx.fill();
+      });
+      ctx.restore();
+    }
+  };
   const lapLinesPlugin = {
     id: 'lapLines',
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea: a, scales: { y, x } } = chart;
+      // "Now" and the finish (15:00) as white vertical lines.
+      const nowMs = rawData?.HeureJourUTC ? new Date(rawData.HeureJourUTC).getTime() : Date.now();
+      const nx = x.getPixelForValue(nowMs);
+      if (nx >= a.left && nx <= a.right) {
+        ctx.save();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(nx, a.top); ctx.lineTo(nx, a.bottom); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText(`NOW ${eventClock(nowMs)}`, nx + 4, a.top + 3);
+        ctx.restore();
+      }
       // The finish (15:00) as a white vertical line.
       const fx = x.getPixelForValue(raceEndMs);
       if (fx >= a.left && fx <= a.right) {
@@ -1744,7 +1797,9 @@ function renderGapChart() {
             label: ctx => {
               if (ctx.dataset.label.startsWith('_')) return null;
               const s = ctx.parsed.y, sign = s > 0 ? '+' : '';
-              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s  (L${ctx.raw?.lap ?? '?'} @ ${eventClock(ctx.parsed.x)})`;
+              const d = ctx.raw;
+              const them = d?.tOther ? `, they crossed ${eventClock(d.tOther)}` : '';
+              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s  (L${d?.lap ?? '?'} — we crossed ${eventClock(ctx.parsed.x)}${them})`;
             }
           }
         }
@@ -1767,7 +1822,7 @@ function renderGapChart() {
         }
       }
     },
-    plugins: [sunBands, lapLinesPlugin],
+    plugins: [sunBands, lapLinesPlugin, overtakeLabels],
   });
 }
 
@@ -1776,10 +1831,15 @@ function renderGapChart() {
 // A slider over the whole session (a race: 0–24 h) with two draggable ends
 // and a draggable middle. Default 4 h. With "Follow live" on and the session
 // running, the window rolls so it always shows 1 h 10 min ahead of now.
-const TW_KEY = 'tw_window_v1', TW_DEFAULT = 4 * 3600000, TW_AHEAD = 70 * 60000, TW_MIN = 10 * 60000;
-let twState = { from: 0, to: TW_DEFAULT, follow: true };   // offsets from the session start (ms)
-try { twState = { ...twState, ...(JSON.parse(localStorage.getItem(TW_KEY)) || {}) }; } catch (e) {}
-function twSave() { try { localStorage.setItem(TW_KEY, JSON.stringify(twState)); } catch (e) {} }
+// One window per clock-time chart ('lap' and 'gap'), each with its own slider.
+const TW_KEY = 'tw_window_v2', TW_DEFAULT = 4 * 3600000, TW_AHEAD = 70 * 60000, TW_MIN = 10 * 60000;
+const twStates = { lap: { from: 0, to: TW_DEFAULT, follow: true }, gap: { from: 0, to: TW_DEFAULT, follow: true } };
+try {
+  const saved = JSON.parse(localStorage.getItem(TW_KEY)) || {};
+  Object.keys(twStates).forEach(k => { if (saved[k]) twStates[k] = { ...twStates[k], ...saved[k] }; });
+} catch (e) {}
+function twSt(key) { return twStates[key] || twStates.lap; }
+function twSave() { try { localStorage.setItem(TW_KEY, JSON.stringify(twStates)); } catch (e) {} }
 // Session span: feed-now − elapsed → + elapsed + remaining (+15 min margin,
 // e.g. the race 15:00 → 15:15 next day).
 function twSession() {
@@ -1789,21 +1849,22 @@ function twSession() {
   const span = (rawData.TempsEcoule || 0) + (rawData.TempsRestant || 0) + 15 * 60000;
   return span > 0 ? { start, span, nowOff: now - start } : null;
 }
-function twClamp(sess) {
-  let w = Math.max(TW_MIN, Math.min(sess.span, twState.to - twState.from));
-  if (twState.follow && sess.nowOff > 0 && sess.nowOff < sess.span) {
-    twState.to = Math.min(sess.span, sess.nowOff + TW_AHEAD);
-    twState.from = twState.to - w;
+function twClamp(sess, st) {
+  let w = Math.max(TW_MIN, Math.min(sess.span, st.to - st.from));
+  if (st.follow && sess.nowOff > 0 && sess.nowOff < sess.span) {
+    st.to = Math.min(sess.span, sess.nowOff + TW_AHEAD);
+    st.from = st.to - w;
   }
-  twState.from = Math.max(0, Math.min(twState.from, sess.span - w));
-  twState.to = twState.from + w;
+  st.from = Math.max(0, Math.min(st.from, sess.span - w));
+  st.to = st.from + w;
 }
-function twRange() {
+function twRange(key = 'lap') {
   const sess = twSession();
   if (!sess) return null;
-  twClamp(sess);
+  const st = twSt(key);
+  twClamp(sess, st);
   twRenderBar(sess);
-  return { min: sess.start + twState.from, max: sess.start + twState.to };
+  return { min: sess.start + st.from, max: sess.start + st.to };
 }
 function twFmtDur(ms) { const m = Math.round(ms / 60000); return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; }
 // Every copy of the slider (one under each clock-time chart) shows the same window.
@@ -1812,12 +1873,13 @@ function twRenderBar(sess) {
   const hours = sess.span / 3600000, step = hours > 12 ? 2 : 1;
   let ticks = '';
   for (let h = 0; h <= hours; h += step) ticks += `<span style="left:${pct(h * 3600000)}">${h}h · ${eventClock(sess.start + h * 3600000)}</span>`;
-  const label = `${eventClock(sess.start + twState.from)} – ${eventClock(sess.start + twState.to)}  (${twFmtDur(twState.to - twState.from)})`;
   document.querySelectorAll('.tw-bar').forEach(bar => {
+    const st = twSt(bar.dataset.tw);
+    const label = `${eventClock(sess.start + st.from)} – ${eventClock(sess.start + st.to)}  (${twFmtDur(st.to - st.from)})`;
     const track = bar.querySelector('.tw-track'), sel = bar.querySelector('.tw-sel');
     if (!track || !sel) return;
-    sel.style.left = pct(twState.from);
-    sel.style.width = pct(twState.to - twState.from);
+    sel.style.left = pct(st.from);
+    sel.style.width = pct(st.to - st.from);
     // 8h/16h markers (24 h race only) and the "now" line.
     track.querySelectorAll('.tw-mark,.tw-now').forEach(e => e.remove());
     if (sess.span > 20 * 3600000) [8, 16].forEach(h => {
@@ -1828,21 +1890,22 @@ function twRenderBar(sess) {
     }
     bar.querySelector('.tw-ticks').innerHTML = ticks;
     bar.querySelector('.tw-label').textContent = label;
-    bar.querySelector('.tw-follow').checked = twState.follow;
+    bar.querySelector('.tw-follow').checked = st.follow;
   });
 }
-function twApply() {
+function twApply(key = 'lap') {
   twSave();
-  const r = twRange();
-  [lapTimesTimeChart, gapChart].forEach(ch => {
-    if (!r || !ch) return;
+  const r = twRange(key);
+  const ch = key === 'gap' ? gapChart : lapTimesTimeChart;
+  if (r && ch) {
     ch.options.scales.x.min = r.min;
     ch.options.scales.x.max = r.max;
     ch.update('none');
-  });
+  }
+  twRange(key === 'gap' ? 'lap' : 'gap');   // keep the other bar drawn correctly
 }
-function twSetFollow(on) { twState.follow = on; twApply(); }
-function twReset() { twState = { from: 0, to: TW_DEFAULT, follow: true }; twApply(); }
+function twSetFollow(on, key = 'lap') { twSt(key).follow = on; twApply(key); }
+function twReset(key = 'lap') { twStates[key] = { from: 0, to: TW_DEFAULT, follow: true }; twApply(key); }
 (function twWire() {
   let drag = null, raf = 0;
   document.querySelectorAll('.tw-track').forEach(track => {
@@ -1852,23 +1915,25 @@ function twReset() { twState = { from: 0, to: TW_DEFAULT, follow: true }; twAppl
     if (!sess || !kind) return;
     e.preventDefault();
     track.setPointerCapture(e.pointerId);
-    drag = { kind, x0: e.clientX, from: twState.from, to: twState.to, span: sess.span, w: track.clientWidth };
+    const key = track.closest('.tw-bar')?.dataset.tw || 'lap', st = twSt(key);
+    drag = { kind, key, x0: e.clientX, from: st.from, to: st.to, span: sess.span, w: track.clientWidth };
   });
   track.addEventListener('pointermove', e => {
     if (!drag) return;
     const d = (e.clientX - drag.x0) / drag.w * drag.span;
-    twState.follow = false;   // moving the window by hand stops the auto-roll
+    const st = twSt(drag.key);
+    st.follow = false;   // moving the window by hand stops the auto-roll
     if (drag.kind === 'm') {
       const w = drag.to - drag.from;
-      twState.from = Math.max(0, Math.min(drag.span - w, drag.from + d)); twState.to = twState.from + w;
+      st.from = Math.max(0, Math.min(drag.span - w, drag.from + d)); st.to = st.from + w;
     } else if (drag.kind === 'l') {
-      twState.from = Math.max(0, Math.min(drag.to - TW_MIN, drag.from + d));
+      st.from = Math.max(0, Math.min(drag.to - TW_MIN, drag.from + d));
     } else {
-      twState.to = Math.min(drag.span, Math.max(drag.from + TW_MIN, drag.to + d));
+      st.to = Math.min(drag.span, Math.max(drag.from + TW_MIN, drag.to + d));
     }
-    if (!raf) raf = requestAnimationFrame(() => { raf = 0; twApply(); });
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; twApply(drag?.key || 'lap'); });
   });
-  const end = () => { if (drag) { drag = null; twApply(); } };
+  const end = () => { if (drag) { const k = drag.key; drag = null; twApply(k); } };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
   });
@@ -1930,7 +1995,7 @@ function renderLapTimesTimeChart(active) {
   // end (start + elapsed + remaining) plus a 5-minute margin. TempsEcoule +
   // TempsRestant is the session's full length (e.g. 2h practice, 24h race).
   let xMin, xMax;
-  const tw = twRange();
+  const tw = twRange('lap');
   if (tw) { xMin = tw.min; xMax = tw.max; }
 
   // Pit stop dotted lines (like the top chart), positioned by clock time

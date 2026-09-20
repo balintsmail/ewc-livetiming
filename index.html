@@ -82,6 +82,13 @@
   }
   .team-toggle.on { color: #fff; }
 
+  #standings-table td.cat-pos { color: #93c5fd; }
+  .gap-pace { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; margin: 4px 0 8px; }
+  .gap-pace input[type=range] { width: 160px; accent-color: #3b82f6; }
+  .gap-y-num { width: 64px; background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; padding: 2px 4px; font-family: monospace; font-size: 11px; }
+  #standings-table td.pts-col { text-align: right; font-family: monospace; color: #a3a3a3; }
+  #standings-table td.pts-fin { color: #fbbf24; font-weight: 700; }
+
   /* Lap table */
   #lap-table-wrap { overflow-x: auto; }
   #lap-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
@@ -157,6 +164,9 @@
   .sa-stint.sa-odd .sa-bar { background: #444 !important; color: #bbb; }
   .sa-stint.sa-odd .sa-lbl::after { content: 'odd — not counted'; color: #f87171; margin-left: auto; }
   .sa-stint.sa-active .sa-lbl b { color: var(--c); }
+  .pit-yrange { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #888; margin: 4px 0 6px; }
+  .pit-yrange input[type=range] { width: 220px; accent-color: #3b82f6; }
+  .pit-yrange b { color: #cbd5e1; font-family: monospace; min-width: 42px; }
   .pit-typ { float: right; font-size: 11px; color: #888; font-weight: 400; }
   .pit-typ input { width: 52px; background: #1a1a1a; border: 1px solid #333; color: #ddd; border-radius: 4px; padding: 1px 4px; }
   .sa-stint.pit-est .sa-bar { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.35) 4px 8px); }
@@ -328,9 +338,11 @@
     <table id="standings-table">
       <thead>
         <tr>
-          <th>Pos</th><th>No.</th><th>Cat</th><th>Team</th><th>Rider</th><th>Bike</th>
+          <th>Pos</th><th title="Position in the category">Cat Pos</th><th>No.</th><th>Cat</th><th>Team</th><th>Rider</th><th>Bike</th>
           <th>S1</th><th>S2</th><th>S3</th><th>Last Lap</th><th>Best Lap</th>
           <th>Gap 1st</th><th>Laps</th><th>Pits</th>
+          <th title="Points for this class position at the 16h partial (reg 1.34.7)">@16h</th>
+          <th title="Points for this class position at the finish, 24H scale (reg 1.34.5)">Finish</th>
         </tr>
       </thead>
       <tbody id="standings-body"></tbody>
@@ -364,29 +376,17 @@
     </h3>
     <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes-time"></canvas></div>
     <div class="tw-bar">
-      <div class="tw-track" id="tw-track">
-        <div class="tw-sel" id="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
+      <div class="tw-track">
+        <div class="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
       </div>
-      <div class="tw-ticks" id="tw-ticks"></div>
-      <div class="tw-info"><span id="tw-label"></span>
-        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" id="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
+      <div class="tw-ticks"></div>
+      <div class="tw-info"><span class="tw-label"></span>
+        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
         <button class="team-toggle" onclick="twReset()">Reset 4 h</button>
       </div>
     </div>
   </div>
 
-  <div class="chart-card">
-    <h3>Lap Times by Team
-      <span style="float:right;font-size:11px;color:#666;font-weight:400;display:flex;align-items:center;gap:8px">
-        Avg window:
-        <input type="range" id="avg-window-slider" min="1" max="22" value="1" step="1"
-          style="width:100px;accent-color:#3b82f6"
-          oninput="document.getElementById('avg-window-label').textContent=this.value+' laps'; renderCharts()">
-        <span id="avg-window-label" style="color:#aaa;min-width:44px">1 laps</span>
-      </span>
-    </h3>
-    <div class="chart-wrap" style="height:765px"><canvas id="chart-laptimes"></canvas></div>
-  </div>
 
   <div class="chart-card">
     <h3>Gap to Us (cumulative seconds)
@@ -395,17 +395,35 @@
         <span id="ref-team-bar" style="display:inline-flex;gap:4px;margin-left:6px"></span>
       </span>
     </h3>
+    <div class="q-filter" id="gap-filter"></div>
+    <div class="gap-pace">Prediction pace: last
+      <input type="range" id="gap-pace-laps" min="3" max="40" step="1" value="12" oninput="gapPaceLaps(this.value)">
+      <input type="number" id="gap-pace-laps-num" min="3" max="200" step="1" value="12" oninput="gapPaceLaps(this.value)"> laps
+      <span style="color:#555">· dotted lines project the gap to the finish at that pace</span>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="font-size:11px;color:#555;white-space:nowrap">Min</span>
       <input type="range" id="gap-y-min" min="-600" max="0" value="-100" step="10"
         style="flex:1;accent-color:#ef4444">
+      <input type="number" id="gap-y-min-num" step="10" class="gap-y-num" oninput="gapYFromInput('min', this.value)">
       <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-100s</span>
       <span style="font-size:11px;color:#555;white-space:nowrap;margin-left:8px">Max</span>
       <input type="range" id="gap-y-max" min="0" max="600" value="60" step="10"
         style="flex:1;accent-color:#22c55e">
+      <input type="number" id="gap-y-max-num" step="10" class="gap-y-num" oninput="gapYFromInput('max', this.value)">
       <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+60s</span>
     </div>
     <div class="chart-wrap" style="height:680px"><canvas id="chart-gap"></canvas></div>
+    <div class="tw-bar">
+      <div class="tw-track">
+        <div class="tw-sel"><div class="tw-h tw-l" data-drag="l"></div><div class="tw-mid" data-drag="m"></div><div class="tw-h tw-r" data-drag="r"></div></div>
+      </div>
+      <div class="tw-ticks"></div>
+      <div class="tw-info"><span class="tw-label"></span>
+        <label class="pf-switch" title="During the race the window rolls with the clock, showing 1 h 10 min ahead of now"><input type="checkbox" class="tw-follow" checked onchange="twSetFollow(this.checked)"><span class="pf-slider"></span> Follow live</label>
+        <button class="team-toggle" onclick="twReset()">Reset 4 h</button>
+      </div>
+    </div>
   </div>
 
   <div class="chart-card">
@@ -504,6 +522,14 @@
         · typical last sector <input type="number" id="pit-typ-s3" step="0.1" value="52.5" onchange="pitSaveTypical()"> s</span>
     </h3>
     <div class="q-filter" id="tsel-pit"></div>
+    <div class="pit-yrange">
+      <span>Y axis</span>
+      <span>min</span><input type="range" id="pit-ymin" min="0" max="400" step="5" value="0" oninput="pitYRange(this)">
+      <b id="pit-ymin-v">0 s</b>
+      <span>max</span><input type="range" id="pit-ymax" min="0" max="400" step="5" value="120" oninput="pitYRange(this)">
+      <b id="pit-ymax-v">120 s</b>
+      <button class="team-toggle" onclick="pitYReset()">Reset 0–120</button>
+    </div>
     <div class="chart-wrap" style="height:560px;margin-bottom:12px"><canvas id="chart-pit-lines"></canvas></div>
     <div class="sa-grid" id="pit-grid"></div>
   </div>
@@ -684,6 +710,7 @@ function buildColumnMap(colonnes) {
     laps:        m['NbTour']             ?? 17,
     pits:        m['NbStand']            ?? 18,
     lapsSinceStand: m['TourDepuisStand'] ?? null,
+    pitTime:     m['TpsStand']           ?? null,
   };
 }
 
@@ -993,6 +1020,7 @@ function renderStandings(data) {
     const cat = cleanVal(r[C.cat]);
     return `<tr class="${posClass}">
       <td class="pos">${pos}</td>
+      <td class="pos cat-pos">${cleanVal(r[C.catPos])}</td>
       <td class="num">${cleanVal(r[C.num])}</td>
       <td><span class="cat-badge cat-${cat}">${cat}</span></td>
       <td>${cleanVal(r[C.team])}</td>
@@ -1003,6 +1031,8 @@ function renderStandings(data) {
       <td class="gap">${cleanVal(r[C.gap])}</td>
       <td class="time">${cleanVal(r[C.laps])}</td>
       <td class="time">${cleanVal(r[C.pits])}</td>
+      <td class="pts-col">${LS_PARTIAL_PTS[(parseInt(cleanVal(r[C.catPos])) || 0) - 1] || ''}</td>
+      <td class="pts-col pts-fin">${LS_FINISH_PTS[(parseInt(cleanVal(r[C.catPos])) || 0) - 1] || ''}</td>
     </tr>`;
   }).join('');
 }
@@ -1271,8 +1301,11 @@ function renderCharts() {
     }
   };
 
-  if (lapChart) lapChart.destroy();
-  lapChart = new Chart(document.getElementById('chart-laptimes'), {
+  // The "Lap Times by Team" chart was removed from the page; the loop above
+  // still runs because it marks in/out laps for the other charts.
+  const lapCanvas = document.getElementById('chart-laptimes');
+  if (lapChart) { lapChart.destroy(); lapChart = null; }
+  if (lapCanvas) lapChart = new Chart(lapCanvas, {
     type: 'scatter',
     data: { datasets },
     options: {
@@ -1323,9 +1356,9 @@ function renderCharts() {
     plugins: [lapPitLabelPlugin],
   });
 
-  if (!refTeam || !activeTeams.has(refTeam)) refTeam = active[0];
-  buildRefTeamBar(active);
-  renderGapChart(active);
+  if (!refTeam || !teamData[refTeam]) refTeam = gapTeams()[0] || active[0];
+  buildRefTeamBar(gapTeams());
+  renderGapChart();
   renderLapTimesTimeChart(active);
   renderLapTable(active);
 }
@@ -1436,6 +1469,88 @@ function rebuildGapHistory() {
   console.log('Gap history rebuilt from lap times for', Object.keys(teamData).length, 'teams');
 }
 
+// The gap chart has its own team selection (top 8 by default).
+const GAP_TEAMS_KEY = 'gap_teams_v1';
+let gapSel = new Set(DEFAULT_TEAMS);
+try { const t = JSON.parse(localStorage.getItem(GAP_TEAMS_KEY)); if (Array.isArray(t)) gapSel = new Set(t); } catch (e) {}
+function gapSaveSel() { try { localStorage.setItem(GAP_TEAMS_KEY, JSON.stringify([...gapSel])); } catch (e) {} }
+function gapTeams() { return pfAllNums().filter(n => gapSel.has(n) && teamData[n]); }
+function gapSetMode(mode) {
+  gapSel = mode === 'top8' ? new Set(DEFAULT_TEAMS)
+    : mode === 'all' ? new Set(pfAllNums())
+    : mode === 'sst' ? new Set(pfAllNums().filter(n => (teamData[n]?.cat || '').toUpperCase() === 'SST'))
+    : new Set([refTeam]);
+  gapSaveSel(); renderGapChart();
+}
+function gapToggle(num) {
+  if (gapSel.has(num)) gapSel.delete(num); else gapSel.add(num);
+  gapSaveSel(); renderGapChart();
+}
+// How many laps the prediction pace is averaged over.
+const GAP_PACE_KEY = 'gap_pace_laps_v1';
+let gapPaceLapsN = 12;
+try { const v = parseInt(localStorage.getItem(GAP_PACE_KEY)); if (v >= 3) gapPaceLapsN = v; } catch (e) {}
+function gapPaceN() { return gapPaceLapsN; }
+function gapPaceLaps(v) {
+  const n = parseInt(v);
+  if (!(n >= 3)) return;
+  gapPaceLapsN = n;
+  try { localStorage.setItem(GAP_PACE_KEY, String(n)); } catch (e) {}
+  const sl = document.getElementById('gap-pace-laps'), num = document.getElementById('gap-pace-laps-num');
+  if (sl) sl.value = Math.min(n, +sl.max);
+  if (num) num.value = n;
+  renderGapChart();
+}
+// A team's laps without the in-laps and out-laps.
+function normalLaps(num) {
+  const td = teamData[num];
+  if (!td) return [];
+  const skip = new Set();
+  (td.stints || []).forEach((st, i, all) => {
+    if (!st.length) return;
+    skip.add(st[0]);                                   // out-lap (and the very first lap of the race)
+    if (i < all.length - 1) skip.add(st[st.length - 1]); // in-lap of a finished stint
+  });
+  return td.laps.filter(l => l.timeSec && !skip.has(l));
+}
+function gapRenderFilter() {
+  const sl = document.getElementById('gap-pace-laps'), num = document.getElementById('gap-pace-laps-num');
+  if (sl) sl.value = Math.min(gapPaceLapsN, +sl.max);
+  if (num) num.value = gapPaceLapsN;
+  const bar = document.getElementById('gap-filter');
+  if (!bar) return;
+  bar.innerHTML = `<button class="team-toggle" onclick="gapSetMode('top8')">Top 8</button>
+    <button class="team-toggle" onclick="gapSetMode('sst')">SST</button>
+    <button class="team-toggle" onclick="gapSetMode('all')">All</button>
+    <button class="team-toggle" onclick="gapSetMode('none')">None</button><span class="sep"></span>` +
+    pfAllNums().map(n => {
+      const on = gapSel.has(n), col = colorForTeam(n);
+      const style = on ? `border-color:${col};background:${col}22;color:${col}` : '';
+      const nm = (teamData[n]?.name || teamNameByNum[n] || '').replace(/"/g, '&quot;');
+      return `<button class="team-toggle${on ? ' on' : ''}" style="${style}" title="${nm}" onclick="gapToggle('${n}')">#${n}</button>`;
+    }).join('');
+}
+// Y range: sliders and number boxes stay in step.
+function gapYSync() {
+  ['min', 'max'].forEach(k => {
+    const sl = document.getElementById(`gap-y-${k}`), num = document.getElementById(`gap-y-${k}-num`);
+    if (!sl || !num) return;
+    num.value = sl.value;
+    document.getElementById(`gap-y-${k}-label`).textContent = (k === 'max' ? '+' : '') + sl.value + 's';
+  });
+}
+function gapYFromInput(which, v) {
+  const n = parseInt(v);
+  if (!Number.isFinite(n)) return;
+  const sl = document.getElementById(`gap-y-${which}`);
+  sl._userSet = true;
+  if (n < +sl.min) sl.min = Math.floor(n / 10) * 10;        // the box can go past the slider's range
+  if (n > +sl.max) sl.max = Math.ceil(n / 10) * 10;
+  sl.value = n;
+  document.getElementById(`gap-y-${which}-label`).textContent = (which === 'max' ? '+' : '') + n + 's';
+  renderGapChart();
+}
+
 function buildRefTeamBar(active) {
   const bar = document.getElementById('ref-team-bar');
   if (!bar) return;
@@ -1446,7 +1561,7 @@ function buildRefTeamBar(active) {
     const isRef = num === refTeam;
     btn.textContent = `#${num}`;
     btn.style.cssText = `padding:2px 8px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;border:2px solid ${isRef ? col : '#333'};background:${isRef ? col+'33' : '#1a1a1a'};color:${isRef ? col : '#555'};`;
-    btn.onclick = () => { refTeam = num; renderGapChart(active); buildRefTeamBar(active); };
+    btn.onclick = () => { refTeam = num; renderGapChart(); buildRefTeamBar(gapTeams()); };
     bar.appendChild(btn);
   });
 }
@@ -1460,16 +1575,38 @@ function calcCumulativeGap(teamLaps, refLaps) {
   });
 }
 
-function renderGapChart(active) {
-  if (!active.length || !teamData[refTeam]) return;
+function renderGapChart() {
+  gapRenderFilter();
+  const active = gapTeams();
+  if (!teamData[refTeam]) return;
   const refLaps = teamData[refTeam].laps;
 
+  // Pace over a team's last N normal laps: the first lap of a stint (out-lap)
+  // and the last lap of a finished stint (in-lap) are left out, then racePace
+  // drops anything still far off (safety car, a slow lap after a problem).
+  const nLaps = gapPaceN();
+  const pace12 = num => racePace(normalLaps(num).slice(-nLaps));
+  const refPace12 = pace12(refTeam);
+  const raceEnd = pfRaceWindow().end;
+  const preds = [];
   const datasets = active
     .filter(num => num !== refTeam)
     .map(num => {
       const col = colorForTeam(num);
       const td = teamData[num];
-      const pts = calcRealGap(num, refTeam);
+      const pts = calcRealGap(num, refTeam).filter(p => p.t).map(p => ({ x: p.t, y: p.y, lap: p.x }));
+      // Dotted line from the last common lap: where the gap goes if both keep
+      // the pace of their last 12 laps.
+      const p12 = pace12(num), last = pts[pts.length - 1];
+      if (last && p12 && refPace12 && raceEnd > last.x) {
+        const rate = (p12 - refPace12) / refPace12;   // seconds of gap per second of racing
+        preds.push({
+          label: `_pred_${num}`,
+          data: [{ x: last.x, y: last.y }, { x: raceEnd, y: +(last.y + rate * (raceEnd - last.x) / 1000).toFixed(1) }],
+          borderColor: col + 'aa', borderWidth: 2, borderDash: [6, 5],
+          pointRadius: 0, fill: false, parsing: false, tension: 0,
+        });
+      }
       return {
         label: teamLabel(num),
         data: pts,
@@ -1484,12 +1621,13 @@ function renderGapChart(active) {
       };
     });
 
+  datasets.push(...preds);
+
   // zero reference line for "us"
-  const refHist = gapHistory[refTeam] || [];
   const refCol = colorForTeam(refTeam);
   datasets.unshift({
     label: `${teamLabel(refTeam)} (us)`,
-    data: refHist.map(pt => ({ x: pt.lap, y: 0 })),
+    data: refLaps.filter(l => l.tsMs).map(l => ({ x: l.tsMs, y: 0, lap: l.lap })),
     borderColor: refCol,
     borderWidth: 2,
     borderDash: [4, 4],
@@ -1512,67 +1650,52 @@ function renderGapChart(active) {
     maxSlider.value = 60;
     document.getElementById('gap-y-max-label').textContent = '+60s';
   }
-  if (minSlider) minSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-min-label').textContent = this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
-  if (maxSlider) maxSlider.oninput = function() { this._userSet = true; document.getElementById('gap-y-max-label').textContent = '+'+this.value+'s'; renderGapChart([...activeTeams].filter(n=>teamData[n])); };
+  if (minSlider) minSlider.oninput = function() { this._userSet = true; gapYSync(); renderGapChart(); };
+  if (maxSlider) maxSlider.oninput = function() { this._userSet = true; gapYSync(); renderGapChart(); };
+  gapYSync();
   const yMin = parseInt(minSlider?.value) ?? -100;
   const yMax = parseInt(maxSlider?.value) ?? 60;
   const yRange = Math.max(Math.abs(yMin), yMax);
 
-  // Our lap crossing markers — thin dark grey dotted vertical lines
-  refHist.forEach(pt => {
-    datasets.push({
-      label: `_ourlap_${pt.lap}`,
-      data: [{ x: pt.lap, y: yMin * 1.5 }, { x: pt.lap, y: yMax * 1.5 }],
-      borderColor: '#2a2a2a', borderWidth: 1, borderDash: [2, 4],
-      pointRadius: 0, fill: false, parsing: false, tension: 0,
-    });
-  });
-
-  // Pit stop vertical lines for all active teams
-  const pitLabels = []; // { x, label, col } for afterDraw
-  [...active, refTeam].forEach(num => {
-    const stints = teamData[num]?.stints || [];
-    const col = colorForTeam(num);
-    stints.slice(0, -1).forEach(stint => {
-      if (!stint.length) return;
-      const pitLap = stint[stint.length - 1].lap;
-      pitLabels.push({ x: pitLap, label: `L${pitLap}`, col, num });
-      datasets.push({
-        label: `_pit_gap_${num}_${pitLap}`,
-        data: [{ x: pitLap, y: yMin * 1.1 }, { x: pitLap, y: yMax * 1.1 }],
-        borderColor: col,
-        borderWidth: 1.5,
-        borderDash: [4, 3],
-        pointRadius: 0,
-        fill: false,
-        parsing: false,
-        tension: 0,
-      });
-    });
-  });
-
+  const twGap = twRange();
   if (gapChart) gapChart.destroy();
 
-  // Custom plugin to draw L{N} lap labels on pit lines
-  const pitLabelPlugin = {
-    id: 'pitLabels',
-    afterDraw(chart) {
-      const ctx = chart.ctx;
-      const xScale = chart.scales.x;
-      const top = chart.chartArea.top;
-      pitLabels.forEach(pl => {
-        const xPx = xScale.getPixelForValue(pl.x);
-        if (xPx < chart.chartArea.left || xPx > chart.chartArea.right) return;
+  // A dotted line every lap's worth of time (the reference team's race pace),
+  // so a gap can be read as "a lap down".
+  const refPace = racePace((teamData[refTeam]?.laps || []).filter(l => l.tsMs >= pfRaceWindow().start)) || 116;
+  const raceEndMs = pfRaceWindow().end;
+  const lapLinesPlugin = {
+    id: 'lapLines',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { y, x } } = chart;
+      // The finish (15:00) as a white vertical line.
+      const fx = x.getPixelForValue(raceEndMs);
+      if (fx >= a.left && fx <= a.right) {
         ctx.save();
-        ctx.fillStyle = pl.col;
-        ctx.font = 'bold 10px Segoe UI, Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(pl.label, xPx, top + 10);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(fx, a.top); ctx.lineTo(fx, a.bottom); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Segoe UI, Arial'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+        ctx.fillText(`FINISH ${eventClock(raceEndMs)}`, fx - 4, a.top + 3);
         ctx.restore();
-      });
+      }
+      ctx.save();
+      ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.strokeStyle = '#3f3f46';
+      ctx.font = '10px Segoe UI, Arial'; ctx.textBaseline = 'bottom';
+      for (let k = 1; k <= 40; k++) {
+        [k, -k].forEach(sign => {
+          const v = sign * refPace;
+          if (v < y.min || v > y.max) return;
+          const py = y.getPixelForValue(v);
+          ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+          ctx.fillStyle = '#71717a'; ctx.textAlign = 'left';
+          ctx.fillText(`Lap ${sign > 0 ? k : '−' + k}`, a.left + 4, py - 2);
+          ctx.textAlign = 'right';
+          ctx.fillText(secToStr(Math.abs(v)).replace(/^0:/, ''), a.right - 4, py - 2);
+        });
+      }
+      ctx.restore();
     }
   };
-
   gapChart = new Chart(document.getElementById('chart-gap'), {
     type: 'line',
     data: { datasets },
@@ -1582,28 +1705,26 @@ function renderGapChart(active) {
         legend: {
           labels: {
             color: '#ccc', font: { size: 11 }, boxWidth: 14,
-            filter: item => !item.text.startsWith('_pit_gap_') && !item.text.startsWith('_ourlap_')
+            filter: item => !item.text.startsWith('_')
           }
         },
         tooltip: {
           callbacks: {
             label: ctx => {
-              if (ctx.dataset.label.startsWith('_pit_gap_') || ctx.dataset.label.startsWith('_ourlap_')) return null;
-              const s = ctx.parsed.y;
-              const sign = s > 0 ? '+' : '';
-              const timeStr = ctx.raw?.t > 1e12
-                ? ' @ ' + eventClock(ctx.raw.t)
-                : '';
-              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s${timeStr}`;
+              if (ctx.dataset.label.startsWith('_')) return null;
+              const s = ctx.parsed.y, sign = s > 0 ? '+' : '';
+              return ` ${ctx.dataset.label}: ${sign}${s.toFixed(1)}s  (L${ctx.raw?.lap ?? '?'} @ ${eventClock(ctx.parsed.x)})`;
             }
           }
         }
       },
       scales: {
+        // Clock time, driven by the same window slider as the chart above.
         x: {
           type: 'linear',
-          title: { display: true, text: 'Lap', color: '#666' },
-          ticks: { color: '#888', stepSize: 1 },
+          min: twGap?.min, max: twGap?.max,
+          title: { display: true, text: 'Clock Time', color: '#666' },
+          ticks: { color: '#888', maxTicksLimit: 16, callback: v => v > 1e12 ? eventClock(v) : v },
           grid: { color: '#222' }
         },
         y: {
@@ -1615,7 +1736,7 @@ function renderGapChart(active) {
         }
       }
     },
-    plugins: [pitLabelPlugin],
+    plugins: [sunBands, lapLinesPlugin],
   });
 }
 
@@ -1654,43 +1775,46 @@ function twRange() {
   return { min: sess.start + twState.from, max: sess.start + twState.to };
 }
 function twFmtDur(ms) { const m = Math.round(ms / 60000); return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; }
+// Every copy of the slider (one under each clock-time chart) shows the same window.
 function twRenderBar(sess) {
-  const track = document.getElementById('tw-track'), sel = document.getElementById('tw-sel');
-  if (!track || !sel) return;
   const pct = v => (v / sess.span * 100) + '%';
-  sel.style.left = pct(twState.from);
-  sel.style.width = pct(twState.to - twState.from);
-  // 8h/16h markers (24 h race only) and the "now" line.
-  track.querySelectorAll('.tw-mark,.tw-now').forEach(e => e.remove());
-  if (sess.span > 20 * 3600000) [8, 16].forEach(h => {
-    const m = document.createElement('div'); m.className = 'tw-mark'; m.style.left = pct(h * 3600000); track.appendChild(m);
-  });
-  if (sess.nowOff > 0 && sess.nowOff < sess.span) {
-    const n = document.createElement('div'); n.className = 'tw-now'; n.style.left = pct(sess.nowOff); n.title = 'now'; track.appendChild(n);
-  }
   const hours = sess.span / 3600000, step = hours > 12 ? 2 : 1;
   let ticks = '';
   for (let h = 0; h <= hours; h += step) ticks += `<span style="left:${pct(h * 3600000)}">${h}h · ${eventClock(sess.start + h * 3600000)}</span>`;
-  document.getElementById('tw-ticks').innerHTML = ticks;
-  document.getElementById('tw-label').textContent =
-    `${eventClock(sess.start + twState.from)} – ${eventClock(sess.start + twState.to)}  (${twFmtDur(twState.to - twState.from)})`;
-  document.getElementById('tw-follow').checked = twState.follow;
+  const label = `${eventClock(sess.start + twState.from)} – ${eventClock(sess.start + twState.to)}  (${twFmtDur(twState.to - twState.from)})`;
+  document.querySelectorAll('.tw-bar').forEach(bar => {
+    const track = bar.querySelector('.tw-track'), sel = bar.querySelector('.tw-sel');
+    if (!track || !sel) return;
+    sel.style.left = pct(twState.from);
+    sel.style.width = pct(twState.to - twState.from);
+    // 8h/16h markers (24 h race only) and the "now" line.
+    track.querySelectorAll('.tw-mark,.tw-now').forEach(e => e.remove());
+    if (sess.span > 20 * 3600000) [8, 16].forEach(h => {
+      const m = document.createElement('div'); m.className = 'tw-mark'; m.style.left = pct(h * 3600000); track.appendChild(m);
+    });
+    if (sess.nowOff > 0 && sess.nowOff < sess.span) {
+      const n = document.createElement('div'); n.className = 'tw-now'; n.style.left = pct(sess.nowOff); n.title = 'now'; track.appendChild(n);
+    }
+    bar.querySelector('.tw-ticks').innerHTML = ticks;
+    bar.querySelector('.tw-label').textContent = label;
+    bar.querySelector('.tw-follow').checked = twState.follow;
+  });
 }
 function twApply() {
   twSave();
   const r = twRange();
-  if (r && lapTimesTimeChart) {
-    lapTimesTimeChart.options.scales.x.min = r.min;
-    lapTimesTimeChart.options.scales.x.max = r.max;
-    lapTimesTimeChart.update('none');
-  }
+  [lapTimesTimeChart, gapChart].forEach(ch => {
+    if (!r || !ch) return;
+    ch.options.scales.x.min = r.min;
+    ch.options.scales.x.max = r.max;
+    ch.update('none');
+  });
 }
 function twSetFollow(on) { twState.follow = on; twApply(); }
 function twReset() { twState = { from: 0, to: TW_DEFAULT, follow: true }; twApply(); }
 (function twWire() {
-  const track = document.getElementById('tw-track');
-  if (!track) return;
   let drag = null, raf = 0;
+  document.querySelectorAll('.tw-track').forEach(track => {
   track.addEventListener('pointerdown', e => {
     const sess = twSession();
     const kind = e.target.dataset?.drag;
@@ -1716,6 +1840,7 @@ function twReset() { twState = { from: 0, to: TW_DEFAULT, follow: true }; twAppl
   const end = () => { if (drag) { drag = null; twApply(); } };
   track.addEventListener('pointerup', end);
   track.addEventListener('pointercancel', end);
+  });
 })();
 
 function renderLapTimesTimeChart(active) {
@@ -1768,7 +1893,7 @@ function renderLapTimesTimeChart(active) {
     });
   });
 
-  const yMin = 110, yMax = 120;
+  const yMin = 112, yMax = 122;   // 1:52 – 2:02
 
   // Fix the x-axis to the session window: start (feed-now − elapsed) to
   // end (start + elapsed + remaining) plus a 5-minute margin. TempsEcoule +
@@ -1938,6 +2063,10 @@ function updateLapHistory(data) {
     const cat = cleanVal(r[C.cat]);
 
     const pitCount = parseInt(cleanVal(r[C.pits])) || 0;
+    // The feed's own "laps since the last pit stop": the current stint length
+    // straight from timing, right even when laps went unrecorded.
+    const sinceRaw = C.lapsSinceStand != null ? cleanVal(r[C.lapsSinceStand]) : '';
+    const sincePit = /^\d+$/.test(sinceRaw) ? parseInt(sinceRaw) : null;
 
     const feedTeam = cleanVal(r[C.team]);
     if (feedTeam) teamNameByNum[baseNum(num)] = feedTeam;
@@ -1950,6 +2079,7 @@ function updateLapHistory(data) {
       if (!teamData[num].name && teamName) teamData[num].name = teamName;
     }
 
+    teamData[num].lapsSincePit = sincePit;
     const prev = prevLapCount[num] !== undefined ? prevLapCount[num] : -1;
     const firstSeen = prevLapCount[num] === undefined;
 
@@ -2010,6 +2140,14 @@ function updateLapHistory(data) {
     // First sight of a bike: just note its lap count. (This used to add its best
     // lap as a fake "current" lap, which is another way copied laps appeared.)
     let deferLap = false;
+    // Missed transponder crossing: the feed's lap count runs low until race
+    // direction corrects it (the count then skips a number). td.lapOffset holds
+    // the laps it's short; the skip uses it up.
+    const tdo = teamData[num];
+    if (!firstSeen && tdo.lapOffset > 0 && lapCount > prev + 1) {
+      tdo.lapOffset = Math.max(0, tdo.lapOffset - (lapCount - prev - 1));
+      console.log(`#${num}: feed lap count caught up (skip ${prev}→${lapCount}), offset now ${tdo.lapOffset}`);
+    }
     if (!firstSeen && lapCount > prev && lapCount > 0) {
       // Only ever record the last-lap cell. Two feed quirks used to create
       // copied laps: substituting the best lap when the cell was empty or a
@@ -2032,7 +2170,7 @@ function updateLapHistory(data) {
           tdn.pitAdj = (tdn.pitAdj || 0) + 1;
           console.log(`#${num}: pit stop detected from out-lap L${lapCount} (S1 ${sec.s1}) before the feed's pit counter`);
         }
-        addLapEntry({ lap: lapCount, timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st,
+        addLapEntry({ lap: lapCount + (tdn.lapOffset || 0), timeSec, timeStr: lastLapStr, initials: initials(rider), ts: new Date().toLocaleTimeString(), tsMs: feedNowMs, gap1st,
                       rider: riderByNum[num] || '', pits: pitCount + (tdn.pitAdj || 0), ...sec });
       }
     }
@@ -2078,13 +2216,21 @@ function buildStintFilterBar() {
 // stint's last lap to this stint's last lap. A lap the feed missed (e.g. the
 // transponder not reading at a pit stop) still counts, so the stint length is
 // the real one even when fewer laps were recorded.
+// A merged lap (missed crossing) flagged prevShare holds the previous rider's
+// last lap too: that lap counts for the stint before it.
+function stintLastLap(stints, idx) {
+  const st = stints[idx];
+  const next = stints.slice(idx + 1).find(s => s && s.length);
+  return next && next[0].prevShare ? next[0].lap - 1 : st[st.length - 1].lap;
+}
 function stintLapCount(stints, idx) {
   const st = stints[idx];
   if (!st || !st.length) return 0;
-  const last = st[st.length - 1].lap;
+  if (idx === stints.length - 1 && Number.isFinite(stints.sincePit)) return stints.sincePit;   // current stint: from timing
+  const last = stintLastLap(stints, idx);
   for (let j = idx - 1; j >= 0; j--) {
     const p = stints[j];
-    if (p && p.length) return last - p[p.length - 1].lap;
+    if (p && p.length) return last - stintLastLap(stints, j);
   }
   return last - (st[0].lap <= 5 ? 1 : st[0].lap) + 1;   // first stint: from lap 1
 }
@@ -2661,6 +2807,31 @@ function computePits(num, win) {
   return pits;
 }
 
+// A pit stop where the transponder missed a crossing: the out-lap recorded
+// after it is really 2 laps (the rider's last lap + the pit lap). Renumber that
+// lap and everything after it +1, keep the offset until the feed catches up,
+// and take one lap (default 115 s) off the pit time.
+function fixMissedCrossing(num, combinedLap, lapSec = 115) {
+  const td = teamData[num];
+  if (!td) return;
+  // If the feed has already caught up (a lap number skipped after the merged
+  // lap), only the laps before that skip are one low; otherwise all of them
+  // are, and the offset keeps new laps right until the feed skips.
+  const after = td.laps.filter(l => l.lap >= combinedLap).sort((a, b) => a.lap - b.lap);
+  const skipAt = after.findIndex((l, i) => i > 0 && l.lap > after[i - 1].lap + 1);
+  const shift = skipAt > 0 ? after.slice(0, skipAt) : after;
+  shift.slice().reverse().forEach(l => { l.lap += 1; });
+  if (skipAt <= 0) td.lapOffset = (td.lapOffset || 0) + 1;
+  const merged = td.laps.find(l => l.lap === combinedLap + 1);
+  if (merged) merged.prevShare = true;   // its first half is the previous rider's last lap
+  td.laps.sort((a, b) => a.lap - b.lap);
+  const prevLap = td.laps.filter(l => l.lap < combinedLap).pop();
+  if (prevLap) { td.pitAdjust = td.pitAdjust || {}; td.pitAdjust[prevLap.lap] = -lapSec; }
+  rebuildStintsFromPits(num);
+  saveToStorage();
+  renderPitForecast();
+}
+
 function pitSetAdjust(num, inLap) {
   const td = teamData[num];
   if (!td) return;
@@ -2784,6 +2955,7 @@ const pointValueLabels = {
       meta.data.forEach((pt, k) => {
         const d = ds.data[k];
         if (d?.y == null) return;
+        if (pt.y < chart.chartArea.top || pt.y > chart.chartArea.bottom) return;   // outside the Y range
         ctx.fillStyle = ds.borderColor;
         ctx.fillText(ds._fmt ? ds._fmt(d) : d.y, pt.x, pt.y - 6);
       });
@@ -2828,7 +3000,8 @@ function drawTeamLines(key, canvasId, nums, seriesOf, opts) {
       scales: {
         x: { type: 'linear', min: 0.7, max: maxX + 0.6, ticks: { stepSize: 1, color: '#888', callback: v => Number.isInteger(v) ? saOrdinal(v) : '' },
              title: { display: true, text: opts.xTitle, color: '#666' }, grid: { color: '#1c1c1c' } },
-        y: { ticks: { color: '#888' }, title: { display: true, text: opts.yTitle, color: '#666' }, grid: { color: '#1c1c1c' }, grace: '8%' },
+        y: { ticks: { color: '#888' }, title: { display: true, text: opts.yTitle, color: '#666' }, grid: { color: '#1c1c1c' }, grace: '8%',
+             ...(opts.yMin != null ? { min: opts.yMin, max: opts.yMax } : {}) },
       },
       plugins: {
         legend: { labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
@@ -2854,14 +3027,40 @@ function renderStintLines(win, nowMs) {
     }) : null).filter(Boolean);
   }, { xTitle: 'Stint', yTitle: 'Laps', fmt: d => d.hollow ? `${d.y}▶` : d.y });
 }
+// Y range of the pit-time line chart: 0–400 s sliders, 0–120 s by default.
+const PIT_Y_KEY = 'pit_yrange_v1';
+let pitY = { min: 0, max: 120 };
+try { pitY = { ...pitY, ...(JSON.parse(localStorage.getItem(PIT_Y_KEY)) || {}) }; } catch (e) {}
+function pitYSync() {
+  const a = document.getElementById('pit-ymin'), b = document.getElementById('pit-ymax');
+  if (!a || !b) return;
+  a.value = pitY.min; b.value = pitY.max;
+  document.getElementById('pit-ymin-v').textContent = pitY.min + ' s';
+  document.getElementById('pit-ymax-v').textContent = pitY.max + ' s';
+}
+function pitYApply() {
+  try { localStorage.setItem(PIT_Y_KEY, JSON.stringify(pitY)); } catch (e) {}
+  pitYSync();
+  const c = lineCharts.pit;
+  if (c) { c.options.scales.y.min = pitY.min; c.options.scales.y.max = pitY.max; c.update('none'); }
+}
+function pitYRange(el) {
+  const v = parseInt(el.value);
+  if (el.id === 'pit-ymin') pitY.min = Math.min(v, pitY.max - 10);
+  else pitY.max = Math.max(v, pitY.min + 10);
+  pitYApply();
+}
+function pitYReset() { pitY = { min: 0, max: 120 }; pitYApply(); }
+
 function renderPitLines(win) {
+  pitYSync();
   tselRender('pit');
   const nums = pfAllNums().filter(n => tsel.pit.has(n));
   drawTeamLines('pit', 'chart-pit-lines', nums, n => computePits(n, win).filter(p => p.time != null).map(p => ({
     x: p.n, y: p.time, hollow: false, grey: p.est,
     info: `${saOrdinal(p.n)} pit stop · laps ${p.inLap}→${p.outLap} · ${p.riderIn || '—'} → ${p.riderOut || '—'} · ${p.time.toFixed(1)} s`
       + (p.base != null ? ` (in-lap last sector ${p.inS3.toFixed(3)} + out-lap S1 ${p.outS1.toFixed(3)} − ${pitTypical.s1} − ${pitTypical.s3})` : ' (estimate, no sectors)'),
-  })), { xTitle: 'Pit stop', yTitle: 'Pit time (s)', fmt: d => d.y.toFixed(1) });
+  })), { xTitle: 'Pit stop', yTitle: 'Pit time (s)', fmt: d => d.y.toFixed(1), yMin: pitY.min, yMax: pitY.max });
 }
 
 function renderStintGrid(win, nowMs) {
@@ -3805,6 +4004,12 @@ const LS_MS_MODE_KEY = 'ls_ms_mode_v1';
 let lsMsMode = 'custom';
 try { lsMsMode = localStorage.getItem(LS_MS_MODE_KEY) === 'live' ? 'live' : 'custom'; } catch (e) {}
 function lsSetMsMode(mode) {
+  // Live → custom: the custom lists start from the live order (not the old
+  // custom order), so you can adjust from where the race is now.
+  if (lsMsMode === 'live' && mode === 'custom') {
+    LS_MS.forEach(m => { lsMsOrder[m.key] = lsMsList(m); });
+    lsSaveMsOrder();
+  }
   lsMsMode = mode;
   try { localStorage.setItem(LS_MS_MODE_KEY, mode); } catch (e) {}
   lsRenderMsLists(); lsRenderMsChart();
@@ -3819,7 +4024,13 @@ function lsLiveClassPos(team) {
   }
   return null;
 }
+function lsMsDecided(m) { return LS_SEED.some(r => { const v = lsData[r.team]?.R4?.[m.key]; return v !== '' && v != null; }); }
 function lsMsList(m) {
+  // A decided milestone (points already entered) is shown in its own result order.
+  if (lsMsDecided(m)) {
+    const order = lsMsMode === 'live' ? lsMsOrder[m.key] : lsMsOrder[m.key];
+    return order.slice().sort((a, b) => lsMsPts(m, b).pts - lsMsPts(m, a).pts || order.indexOf(a) - order.indexOf(b));
+  }
   if (lsMsMode !== 'live') return lsMsOrder[m.key];
   const cur = lsMsOrder[m.key];
   return cur.slice().sort((a, b) => (lsLiveClassPos(a) ?? 999) - (lsLiveClassPos(b) ?? 999) || cur.indexOf(a) - cur.indexOf(b));
@@ -3830,9 +4041,17 @@ function lsMsPos(m, team) {
   if (lsMsMode === 'live') { const p = lsLiveClassPos(team); return p ? p - 1 : 99; }
   const i = lsMsOrder[m.key].indexOf(team); return i < 0 ? 99 : i;
 }
+// Points for a milestone: the value entered in the table once that milestone
+// is decided (e.g. the 8h result), otherwise the scenario position.
+function lsMsPts(m, team) {
+  const v = lsData[team]?.R4?.[m.key];
+  if (v !== '' && v != null) return { pts: parseFloat(v) || 0, done: true };
+  const i = lsMsPos(m, team);
+  return { pts: m.pts[i] || 0, done: false };
+}
 function lsMsResult(row) {
   const parts = { q: lsPartsFor(row, 99).q };
-  LS_MS.forEach(m => parts[m.key] = m.pts[lsMsPos(m, row.team)] || 0);
+  LS_MS.forEach(m => parts[m.key] = lsMsPts(m, row.team).pts);
   return lsScenarioFromParts(row, parts);
 }
 function lsRenderMsLists() {
@@ -3840,19 +4059,23 @@ function lsRenderMsLists() {
   document.getElementById('ls-ms-mode-custom')?.classList.toggle('on', !live);
   document.getElementById('ls-ms-mode-live')?.classList.toggle('on', live);
   const note = document.getElementById('ls-ms-mode-note');
-  if (note) note.textContent = live
+  const decided = LS_MS.filter(m => lsMsDecided(m)).map(m => m.label);
+  if (note) note.textContent = (decided.length ? `${decided.join(' & ')} decided — real points shown · ` : '') + (live
     ? (Object.keys(lsLivePosMap).length ? 'SST class positions from live timing, updated every 5 s · drag is off' : 'No SST positions in the live feed yet')
-    : 'Drag teams to set each order';
+    : 'Drag teams to set each order');
   LS_MS.forEach(m => {
     const box = document.getElementById(m.box);
     if (!box) return;
     box.innerHTML = lsMsList(m).map((team, i) => {
       const row = LS_SEED.find(r => r.team === team);
       const us = team === LS_US;
-      const p0 = live ? lsMsPos(m, team) : i;
-      return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="${!live}" data-team="${encodeURIComponent(team)}" title="${team}"${live ? ' style="cursor:default"' : ''}>
-        <span class="ls-fin-pos">${p0 < 99 ? 'P' + (p0 + 1) : '—'}</span>
-        <span class="ls-fin-pts" title="${m.label} ${p0 < 99 ? 'P' + (p0 + 1) : 'not running'}">${m.pts[p0] || 0}</span>
+      const done = lsMsDecided(m);
+      const p0 = live && !done ? lsMsPos(m, team) : i;
+      const val = lsMsPts(m, team);
+      const lock = live || done;
+      return `<div class="ls-fin-row${us ? ' ls-fin-us' : ''}" draggable="${!lock}" data-team="${encodeURIComponent(team)}" title="${team}"${lock ? ' style="cursor:default"' : ''}>
+        <span class="ls-fin-pos">${done ? 'P' + (i + 1) : (p0 < 99 ? 'P' + (p0 + 1) : '—')}</span>
+        <span class="ls-fin-pts" title="${done ? m.label + ' result (entered in the table)' : m.label + ' ' + (p0 < 99 ? 'P' + (p0 + 1) : 'not running')}">${val.pts}</span>
         <span class="ls-fin-dot" style="background:${lsColor(row)}"></span>
         <span class="ls-fin-name">${team}</span>
       </div>`;
@@ -4178,6 +4401,7 @@ async function fetchData() {
     document.getElementById('status-dot').classList.add('live');
 
     updateLapHistory(data);
+    healStints();
     pushNewLapsToSheets();
     saveToStorage();
     renderStandings(data);
@@ -4714,18 +4938,44 @@ function syncStatus(text, color) {
   if (el) { el.textContent = `Sync: ${text}`; el.style.color = color || '#666'; }
 }
 // Rebuild a team's stints from the laps' pit counts (stint n = laps after pit n).
+// Stints, rebuilt from the laps every poll. A stop is:
+//   • an out-lap: S1 25 s+ over normal (the pit lane is in S1), except the
+//     restart after a red flag, or
+//   • the feed's pit count going up to a value it hasn't reached before.
+// Both usually come from the same stop, possibly laps apart (the counter
+// lagged, e.g. our transponder): each out-lap is matched with one later count
+// step, so one stop is never counted twice. A dip in the count is ignored.
 function rebuildStintsFromPits(num) {
   const td = teamData[num];
-  let last = 0;
-  const groups = new Map();
-  td.laps.forEach(l => {
-    if (Number.isFinite(l.pits)) last = l.pits;
-    if (!groups.has(last)) groups.set(last, []);
-    groups.get(last).push(l);
+  const laps = td.laps.slice().sort((a, b) => a.lap - b.lap);
+  const red = flagPeriods(FLAG_RED);
+  const stints = [[]];
+  let cur = stints[0], feedMax = null, pending = 0;
+  laps.forEach((l, i) => {
+    const lapStart = (l.tsMs || 0) - (l.timeSec || 0) * 1000;
+    const afterRed = red.some(p => lapStart >= p.start - 60000 && lapStart <= p.end + 15 * 60000);
+    const out = i > 0 && l.s1 != null && l.s1 > pitTypical.s1 + 25 && !afterRed;
+    const p = Number.isFinite(l.pits) ? l.pits : feedMax;
+    const up = feedMax != null && p != null && p > feedMax;
+    if (out) {
+      if (cur.length) { cur = []; stints.push(cur); }
+      if (!up) pending++;                    // the counter hasn't caught up yet
+    } else if (up) {
+      if (pending > 0) pending--;             // late count step for a stop already seen
+      else if (cur.length) { cur = []; stints.push(cur); }
+    }
+    if (p != null && (feedMax == null || p > feedMax)) feedMax = p;
+    cur.push(l);
   });
-  td.stints = [...groups.keys()].sort((a, b) => a - b).map(k => groups.get(k));
-  if (!td.stints.length) td.stints = [[]];
-  if ((prevPitCount[num] || 0) > last) td.stints.push([]);   // pitted, new stint has no lap yet
+  td.stints = stints;
+  if (!TEST_MODE && activeSessionKey === liveSessionKey() && Number.isFinite(td.lapsSincePit)) stints.sincePit = td.lapsSincePit;
+  // In the pit lane now: the counter stepped past every lap recorded so far.
+  const feedNow = (prevPitCount[num] || 0) + (td.pitAdj || 0);
+  if (cur.length && feedMax != null && pending === 0 && feedNow > feedMax) td.stints.push([]);
+}
+// Keep every team's stints consistent with its laps (cheap: a few thousand laps).
+function healStints() {
+  Object.keys(teamData).forEach(num => { if (teamData[num].laps.length) rebuildStintsFromPits(num); });
 }
 function syncMerge(rows) {
   const touched = new Set();

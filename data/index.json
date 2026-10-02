@@ -1,0 +1,16 @@
+[
+ {
+  "file": "boldor-2026-race.json",
+  "key": "ewc_session_2026-09-19_1500_BOL_D_OR___Race",
+  "title": "BOL D'OR - Race",
+  "event": "BOL D'OR",
+  "session": "Race",
+  "savedAt": 1790854886633,
+  "tz": 120,
+  "teams": 56,
+  "laps": 26796,
+  "start": 1789822812291,
+  "end": 1789909519177,
+  "bytes": 1469847
+ }
+]

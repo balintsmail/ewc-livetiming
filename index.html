@@ -293,6 +293,21 @@
   .ls-inrace-ctl label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
   .ls-inrace-ctl input[type=number] { width: 52px; background: #111; border: 1px solid #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
   #ls-inrace-note { color: #666; }
+  /* Replay bar: "look at the race as if we were at ..." */
+  .rp-bar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; padding: 7px 14px; font-size: 12px; color: #cbd5e1;
+    background: #0f2038; border-bottom: 1px solid #1e3a5f; }
+  .rp-bar b { color: #e2e8f0 }
+  .rp-bar input[type=range] { flex: 1 1 340px; min-width: 200px; accent-color: #38bdf8; height: 18px; cursor: pointer }
+  .rp-time { background: #0b1220; border: 1px solid #334155; color: #e2e8f0; border-radius: 4px;
+    padding: 2px 4px; width: 58px; text-align: center; font-weight: 700; font-size: 12px }
+  .rp-clock { color: #38bdf8; font-weight: 700; white-space: nowrap }
+  .rp-state { color: #94a3b8; white-space: nowrap; transition: opacity .15s }
+  .rp-btns { display: flex; gap: 4px; flex-wrap: wrap }
+  .rp-btns button { background: #16263d; border: 1px solid #27405f; color: #9fb6cf; border-radius: 4px;
+    padding: 2px 7px; font-size: 11px; cursor: pointer; line-height: 1.6 }
+  .rp-btns button:hover { border-color: #38bdf8; color: #e2e8f0 }
+  .rp-btns button.on { border-color: #38bdf8; color: #38bdf8; background: #0c2740 }
 </style>
 </head>
 <body>
@@ -312,9 +327,36 @@
       </select>
       <button id="session-del" title="Delete this saved session" onclick="deleteCurrentSession()"
         style="background:#3a1a1a;border:1px solid #5a2a2a;color:#f87171;padding:2px 8px;border-radius:4px;font-size:12px;cursor:pointer;line-height:1">✕</button>
+      <button id="session-export" title="Save this session as a .json file (it can then be opened on any machine, or put in the app's data/ folder)" onclick="exportCurrentSession()"
+        style="background:#14233a;border:1px solid #27405f;color:#9fb6cf;padding:2px 8px;border-radius:4px;font-size:12px;cursor:pointer;line-height:1">⬇</button>
+      <button id="session-import" title="Open a session .json file saved earlier" onclick="document.getElementById('session-file').click()"
+        style="background:#14233a;border:1px solid #27405f;color:#9fb6cf;padding:2px 8px;border-radius:4px;font-size:12px;cursor:pointer;line-height:1">⬆</button>
+      <input type="file" id="session-file" accept=".json,application/json" style="display:none" onchange="importSessionFile(this)">
     </div>
   </div>
 </header>
+
+<!-- REPLAY BAR — only shown for loaded race data (archive / saved file) -->
+<div id="replay-bar" class="rp-bar" style="display:none">
+  <b>⏱ As if we were at</b>
+  <input type="text" id="rp-time" class="rp-time" value="0:00" title="Hours:minutes into the race — type e.g. 9:08"
+         onchange="replayTypeTime(this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+  <input type="range" id="rp-range" min="0" max="86400000" step="60000" value="0"
+         oninput="replaySet(+this.value)" title="Drag to move through the race">
+  <span id="rp-clock" class="rp-clock"></span>
+  <span id="rp-state" class="rp-state"></span>
+  <span class="rp-btns">
+    <button onclick="replaySet(0, true)" title="Race start">⏮</button>
+    <button onclick="replayStep(-600000)">−10m</button>
+    <button onclick="replayStep(-60000)">−1m</button>
+    <button onclick="replayStep(60000)">+1m</button>
+    <button onclick="replayStep(600000)">+10m</button>
+    <button onclick="replaySet(8*3600000, true)" title="The 8-hour mark">8h</button>
+    <button onclick="replaySet(16*3600000, true)" title="The 16-hour mark">16h</button>
+    <button onclick="replayEnd()" title="The end of the race">⏭</button>
+    <button id="rp-play" onclick="replayPlayToggle()" title="Play the race forward, a minute at a time">▶ Play</button>
+  </span>
+</div>
 
 <div class="tabs">
   <div class="tab" data-tab="standings" onclick="switchTab('standings')">Live Laps</div>
@@ -4844,7 +4886,9 @@ function feedBestSnapshot() {
 }
 
 async function saveToStorage() {
-  if (TEST_MODE || !rawData?.Titre) return;
+  // A replay shows part of a session on purpose: saving it would overwrite the
+  // real one with the laps up to the slider.
+  if (TEST_MODE || replayActive() || !rawData?.Titre) return;
   const title = rawData.Titre;
   const { event, session } = splitEventSession(title);
   // Only ever save the live session. (This used to set activeSessionKey to the
@@ -4908,12 +4952,13 @@ function pruneBeforeSessionStart(key) {
   if (removed) console.log(`Removed ${removed} lap(s) from before this session started`);
 }
 
+let loadedState = null;   // the full state of the session last loaded from storage
 async function loadSessionData(key) {
   try {
     const all = await idbGetAll();
     const record = all.find(r => r.key === key);
     if (!record) return false;
-    const state = record.state;
+    const state = loadedState = record.state;
     Object.keys(teamData).forEach(k => delete teamData[k]);
     Object.keys(prevLapCount).forEach(k => delete prevLapCount[k]);
     Object.keys(prevPitCount).forEach(k => delete prevPitCount[k]);
@@ -4949,6 +4994,14 @@ async function switchToSession(key) {
   if (!key) return; // the "● Live" placeholder
   if (key === '__live__') { location.href = location.pathname; return; }
   if (key === '__test__') { window.open(`${location.pathname}?test=race`, '_blank'); buildSessionPicker(); return; }
+  if (key.startsWith('__file__:')) {
+    const name = key.slice('__file__:'.length);
+    if (name === RACE_FILE) return;
+    const url = `${location.pathname}?race=${encodeURIComponent(name)}`;
+    if (VIEW_KEY || RACE_FILE) location.href = url;              // already a read-only tab
+    else { window.open(url, '_blank'); buildSessionPicker(); }   // keep the live tab recording
+    return;
+  }
   if (!VIEW_KEY) {
     // Archives open in another tab so this one keeps recording. If the browser
     // opens it here instead, the banner below makes that obvious.
@@ -4960,6 +5013,7 @@ async function switchToSession(key) {
   const title = await loadSessionData(key);
   document.getElementById('title').textContent = `${title || 'Session'} — archive`;
   activeSessionKey = key;
+  if (loadedState) { replayInit(loadedState, key); buildStintFilterBar(); return; }
   rebuildGapHistory();
   buildTeamFilterBar();
   buildStintFilterBar();
@@ -4969,6 +5023,7 @@ async function switchToSession(key) {
 
 async function buildSessionPicker() {
   const sessions = await getSessions();
+  if (!raceFiles.length) await loadRaceFileList();
   const picker = document.getElementById('session-picker');
   if (!picker) return;
   // Group by event so the archive is browsable by event name → session.
@@ -4981,9 +5036,13 @@ async function buildSessionPicker() {
     : (activeSessionKey && !sessions.some(s => s.key === activeSessionKey) && rawData?.Titre
         ? `<option value="" selected>● Live — ${esc(splitEventSession(rawData.Titre).session)}</option>` : '');
   const testOpt = TEST_MODE ? `<option value="" selected>🧪 Test race (synthetic)</option>` : `<option value="__test__">🧪 Open test race (synthetic)</option>`;
-  picker.innerHTML = liveOpt + testOpt + Object.entries(byEvent).map(([event, list]) =>
+  const fileOpt = raceFiles.length ? `<optgroup label="📁 Saved race files">` + raceFiles.map(f => {
+    const name = String(f.file || '').replace(/\.json$/, '');
+    return `<option value="__file__:${name}" ${name === RACE_FILE ? 'selected' : ''}>${esc(f.title || name)}${f.laps ? ` — ${f.laps.toLocaleString('en-GB')} laps` : ''}</option>`;
+  }).join('') + `</optgroup>` : '';
+  picker.innerHTML = liveOpt + testOpt + fileOpt + Object.entries(byEvent).map(([event, list]) =>
     `<optgroup label="${esc(event)}">` +
-    list.map(s => `<option value="${s.key}" ${s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${sessionDayLabel(s)}</option>`).join('') +
+    list.map(s => `<option value="${s.key}" ${!RACE_FILE && s.key === activeSessionKey ? 'selected' : ''}>${esc(s.session)} — ${sessionDayLabel(s)}</option>`).join('') +
     `</optgroup>`
   ).join('');
 }
@@ -5142,6 +5201,378 @@ async function buildTestRace() {
               TempsEcoule: 4 * H, TempsRestant: 20 * H, Colonnes: [], Donnees: [] };
 }
 
+// ── A session as a file ───────────────────────────────────────
+// The browser that recorded a race keeps it in IndexedDB only. Packed into a
+// file (data/<name>.json, or a download), the same session opens anywhere: the
+// GitHub Pages copy, another machine, a year later. Everything derived from the
+// laps (stints, pit times, gaps) is left out and rebuilt on load, which is also
+// what keeps the file ~5× smaller than the raw stored state.
+const SESSION_FILE_FORMAT = 'ewc-session-1';
+// A lap in the compact form. 'dt' is milliseconds from the file's t0 and
+// 'rider' an index into the team's rider list; the lap-time string, the
+// initials and the clock string are derived again on load.
+const SF_LAP = ['lap', 'dt', 'timeSec', 's1', 's2', 's3', 'pits', 'gap1st', 'rider', 'flags'];
+const SF_FLAGS = { excluded: 1, prevShare: 2, corrected: 4 };
+// Team fields worth keeping: the manual repairs made during the race (pit-time
+// corrections, lap renumbering) belong to the data, not to the view.
+const SF_TEAM = ['name', 'rider', 'cat', 'pitAdjust', 'lapOffset', 'lapRenumbered', 'lapRenumbered2'];
+
+function packSession(state, key) {
+  const ts = Object.values(state.teamData || {}).flatMap(td => (td.laps || []).map(l => l.tsMs || 0)).filter(Boolean);
+  const t0 = ts.length ? Math.min(...ts) : 0;
+  const teams = {};
+  Object.entries(state.teamData || {}).forEach(([num, td]) => {
+    const riders = [];
+    const riderIdx = name => {
+      const i = riders.indexOf(name || '');
+      return i >= 0 ? i : (riders.push(name || ''), riders.length - 1);
+    };
+    const laps = (td.laps || []).slice().sort((a, b) => a.lap - b.lap).map(l => {
+      let f = 0;
+      Object.entries(SF_FLAGS).forEach(([k, bit]) => { if (l[k]) f |= bit; });
+      return [l.lap, l.tsMs ? l.tsMs - t0 : null, l.timeSec ?? null, l.s1 ?? null, l.s2 ?? null, l.s3 ?? null,
+              Number.isFinite(l.pits) ? l.pits : null, l.gap1st ?? null, riderIdx(l.rider), f];
+    });
+    const t = { riders, laps };
+    SF_TEAM.forEach(k => { if (td[k] !== undefined) t[k] = td[k]; });
+    teams[num] = t;
+  });
+  const { event, session } = splitEventSession(state.sessionTitle || '');
+  return { format: SESSION_FILE_FORMAT, key: key || '', title: state.sessionTitle || '', event, session,
+           savedAt: state.savedAt || Date.now(), tz: eventTzOffsetMin, t0, lapFields: SF_LAP,
+           flagLog: state.flagLog || [], feedBest: state.feedBest || {}, teamColors: state.teamColors || {}, teams };
+}
+
+function unpackSession(file) {
+  if (!file.format && file.teamData) return file;        // a raw stored state dump
+  const t0 = file.t0 || 0, fields = file.lapFields || SF_LAP;
+  const teamData = {};
+  Object.entries(file.teams || {}).forEach(([num, t]) => {
+    const { riders = [], laps = [], ...meta } = t;
+    teamData[num] = { ...meta, stints: [[]], laps: laps.map(a => {
+      const v = {};
+      fields.forEach((k, i) => { v[k] = a[i]; });
+      const rider = riders[v.rider] || '';
+      const tsMs = v.dt == null ? null : t0 + v.dt;
+      const lap = { lap: v.lap, timeSec: v.timeSec, timeStr: v.timeSec == null ? '' : secToStr(v.timeSec),
+                    initials: initials(rider || 'X'), rider, ts: tsMs ? new Date(tsMs).toLocaleTimeString() : '',
+                    tsMs, gap1st: v.gap1st ?? null, s1: v.s1 ?? null, s2: v.s2 ?? null, s3: v.s3 ?? null };
+      if (Number.isFinite(v.pits)) lap.pits = v.pits;
+      Object.entries(SF_FLAGS).forEach(([k, bit]) => { if (v.flags & bit) lap[k] = true; });
+      return lap;
+    }) };
+  });
+  return { sessionTitle: file.title, teamData, flagLog: file.flagLog || [], feedBest: file.feedBest || {},
+           teamColors: file.teamColors || {}, savedAt: file.savedAt || 0 };
+}
+
+// Put a loaded session into the page (replacing whatever was shown).
+function applySessionState(state) {
+  [teamData, prevLapCount, prevPitCount, gapHistory].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+  sentLaps.clear();
+  Object.assign(teamData, state.teamData || {});
+  Object.assign(teamColors, state.teamColors || {});
+  flagLog.length = 0;
+  (state.flagLog || []).forEach(f => flagLog.push(f));
+  Object.entries(teamData).forEach(([num, td]) => {
+    const last = (td.laps || []).slice(-1)[0];
+    prevLapCount[num] = last ? last.lap : 0;
+    prevPitCount[num] = last && Number.isFinite(last.pits) ? last.pits : 0;
+    colorForTeam(num);
+  });
+  healStints();
+}
+
+// Race files shipped with the app: data/index.json lists them, so the picker
+// can offer the Bol d'Or race even on a browser that never recorded it.
+const RACE_FILE = new URLSearchParams(location.search).get('race');
+let raceFiles = [];
+async function loadRaceFileList() {
+  try {
+    const r = await fetch('data/index.json', { cache: 'no-cache' });
+    raceFiles = r.ok ? await r.json() : [];
+  } catch (e) { raceFiles = []; }
+  return raceFiles;
+}
+async function loadRaceFile(name) {
+  const r = await fetch(`data/${name}.json`, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`data/${name}.json → HTTP ${r.status}`);
+  const file = await r.json();
+  if (Number.isFinite(file.tz)) eventTzOffsetMin = file.tz;
+  const state = unpackSession(file);
+  applySessionState(state);
+  console.log(`Loaded race file ${name}: ${state.sessionTitle} (${Object.keys(state.teamData).length} teams)`);
+  return { state, file };
+}
+
+// The full session behind what's on screen (replay shows only part of it).
+function currentFullState() {
+  if (replayFull) return replayFull.state;
+  return { sessionTitle: rawData?.Titre || 'session', teamData, flagLog, teamColors,
+           feedBest: rawData ? feedBestSnapshot() : {}, savedAt: Date.now() };
+}
+function sessionFileName() {
+  return (activeSessionKey || RACE_FILE || 'session').replace(/^ewc_session_/, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'session';
+}
+function exportCurrentSession() {
+  const file = packSession(currentFullState(), activeSessionKey || '');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' }));
+  a.download = `${sessionFileName()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+}
+function importSessionFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const file = JSON.parse(rd.result);
+      const state = unpackSession(file);
+      if (!state.teamData || !Object.keys(state.teamData).length) throw new Error('no teams in that file');
+      if (Number.isFinite(file.tz)) eventTzOffsetMin = file.tz;
+      applySessionState(state);
+      activeSessionKey = file.key || `file:${f.name}`;
+      document.getElementById('title').textContent = `${state.sessionTitle || f.name} — loaded file`;
+      replayInit(state, file.key || '');
+      buildStintFilterBar();
+    } catch (e) { alert(`Could not read that session file: ${e.message}`); }
+    input.value = '';
+  };
+  rd.readAsText(f);
+}
+// Dev helper: write the packed session into the app's own data/ folder through
+// serve.py, so a recorded race can be committed with the app.
+async function saveRaceFile(name) {
+  const file = packSession(currentFullState(), activeSessionKey || '');
+  const r = await fetch(`/save-data/${name || sessionFileName()}`, { method: 'POST', body: JSON.stringify(file) });
+  const out = await r.json().catch(() => ({}));
+  console.log('saveRaceFile:', r.status, out);
+  return out;
+}
+
+// ── Replay: the page as it was at a chosen moment ─────────────
+// Loaded race data would otherwise only ever show the finish. The slider on
+// top sets where in the race we are looking from: laps after that moment are
+// dropped and the stints, pit times, gaps, forecasts and the classification
+// are all rebuilt from what had happened by then — so at 9:08 the page looks
+// exactly like it did 9 h 08 min into the race.
+const RP_KEY = 'replay_at_v1';
+const RP_COLS = ['Statut', 'Position', 'PositionCategorie', 'Numero', 'Categorie', 'Sponsors', 'Equipe', 'Nom',
+                 'Nationalite3', 'Vehicule', 'Inter1', 'Inter2', 'Inter3', 'TpsTour', 'MeilleurTour',
+                 'Ecart1er', 'Ecart1erCategorie', 'NbTour', 'NbStand', 'TourDepuisStand', 'TpsStand']
+                .map(Nom => ({ Nom }));
+let replayFull = null, replayAt = 0, replayPlay = null, replayTimer = 0;
+function replayActive() { return !!replayFull; }
+
+// The session's own start time, from its key (ewc_session_<day>_<HHMM>_…), or
+// the first lap rounded down to the minute.
+function rpStartMs(key, first) {
+  const m = /^ewc_session_(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_/.exec(key || '');
+  const fromKey = m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - eventTzOffsetMin * 60000 : null;
+  return fromKey != null && fromKey <= first ? fromKey : Math.floor(first / 60000) * 60000;
+}
+// A 24 h race always runs its full 24 h (the slider covers the whole race even
+// before the data does); any other session spans its own laps.
+function replayWindow(state, key) {
+  const ts = Object.values(state.teamData || {}).flatMap(td => (td.laps || []).map(l => l.tsMs || 0)).filter(Boolean);
+  const first = ts.length ? Math.min(...ts) : Date.now(), last = ts.length ? Math.max(...ts) : first;
+  const start = rpStartMs(key, first);
+  const title = state.sessionTitle || '';
+  const isRace = /race|course/i.test(title) && !/qualif|warm|practice|essai/i.test(title);
+  const raceLen = isRace && last - start > 20 * 3600000 ? 24 * 3600000 : last - start;
+  return { start, raceLen, len: Math.max(raceLen, last - start + 60000) };
+}
+
+function replayInit(state, key) {
+  replayFull = {
+    state, key, win: replayWindow(state, key), flagLog: (state.flagLog || []).slice(),
+    teams: Object.fromEntries(Object.entries(state.teamData || {}).map(([num, td]) => {
+      // Everything the replay recomputes per moment is left out of the snapshot.
+      const { laps, stints, pits, lapsSincePit, latestGap1st, pitAdj, ...meta } = td;
+      return [num, { meta, laps: (laps || []).slice().sort((a, b) => a.lap - b.lap) }];
+    }))
+  };
+  buildColumnMap(RP_COLS);                       // the replay builds feed-shaped rows itself
+  const bar = document.getElementById('replay-bar');
+  if (bar) bar.style.display = '';
+  const range = document.getElementById('rp-range');
+  if (range) range.max = replayFull.win.len;
+  let at = replayFull.win.len;                   // the finish, until the slider is moved
+  try { const saved = JSON.parse(localStorage.getItem(RP_KEY) || '{}'); if (saved[key] != null) at = saved[key]; } catch (e) {}
+  replaySet(at, true);
+}
+
+function rpFmt(ms) {
+  const m = Math.round(Math.max(0, ms) / 60000);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+function rpDayClock(ms) {
+  const day = new Date(ms + eventTzOffsetMin * 60000)
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return `${eventClock(ms)} ${day}`;
+}
+function replayRenderBar(pending) {
+  if (!replayFull) return;
+  const range = document.getElementById('rp-range'), time = document.getElementById('rp-time');
+  if (range) { range.max = replayFull.win.len; range.value = replayAt; }
+  if (time && document.activeElement !== time) time.value = rpFmt(replayAt);
+  const clock = document.getElementById('rp-clock');
+  if (clock) clock.textContent = `${rpDayClock(replayFull.win.start + replayAt)}${replayAt >= replayFull.win.raceLen ? ' · finish' : ''}`;
+  const state = document.getElementById('rp-state');
+  if (state) state.style.opacity = pending ? 0.35 : 1;
+  const play = document.getElementById('rp-play');
+  if (play) { play.textContent = replayPlay ? '⏸ Pause' : '▶ Play'; play.classList.toggle('on', !!replayPlay); }
+}
+// What the moment looked like: our class position, lap and the flag.
+function replayRenderState() {
+  const el = document.getElementById('rp-state');
+  if (!el || !replayFull) return;
+  const us = DEFAULT_TEAMS[0];
+  const td = teamData[us];
+  const row = (rawData?.Donnees || []).find(r => normNum(cleanVal(r[C.num])) === us);
+  // Feed flag codes: 0 green · 1 yellow · 2 red · 3 chequered · 5 FCY · 7 safety car.
+  const flag = { 1: 'yellow flag', 2: 'red flag', 3: 'chequered flag', 5: 'full course yellow', 7: 'safety car' }[rawData?.Drapeau] || '';
+  const bits = [`${Object.keys(teamData).length} bikes`];
+  if (row && td) bits.unshift(`#${us} P${cleanVal(row[C.catPos])} ${td.cat || ''} (P${cleanVal(row[C.pos])} overall) · lap ${cleanVal(row[C.laps])}`);
+  if (flag) bits.push(flag);
+  el.textContent = `· ${bits.join(' · ')}`;
+}
+
+function replaySet(off, immediate) {
+  if (!replayFull) return;
+  replayAt = Math.max(0, Math.min(replayFull.win.len, Math.round(off / 60000) * 60000));
+  clearTimeout(replayTimer);
+  replayRenderBar(!immediate);
+  if (immediate) replayRebuild();
+  else replayTimer = setTimeout(replayRebuild, 120);   // dragging: redraw once the slider settles
+}
+function replayStep(d) { replaySet(replayAt + d, true); }
+function replayEnd() { replaySet(replayFull ? replayFull.win.len : 0, true); }
+function replayTypeTime(v) {
+  const m = /^\s*(\d+)\s*(?:[:h.]\s*(\d{1,2}))?\s*m?\s*$/i.exec(String(v || ''));
+  if (!m) { replayRenderBar(); return; }
+  replaySet((parseInt(m[1]) * 60 + (parseInt(m[2]) || 0)) * 60000, true);
+}
+function replayPlayToggle() {
+  if (replayPlay) { clearTimeout(replayPlay); replayPlay = null; replayRenderBar(); return; }
+  const tick = () => {
+    if (!replayFull || replayAt >= replayFull.win.len) { replayPlay = null; replayRenderBar(); return; }
+    replaySet(replayAt + 60000, true);
+    replayPlay = setTimeout(tick, 350);
+  };
+  replayPlay = setTimeout(tick, 0);
+  replayRenderBar();
+}
+
+// Rebuild the whole page from the laps that had been run by this moment.
+function replayRebuild() {
+  if (!replayFull) return;
+  const win = replayFull.win, T = win.start + replayAt;
+  [teamData, prevLapCount, prevPitCount, gapHistory].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+  Object.entries(replayFull.teams).forEach(([num, t]) => {
+    const laps = t.laps.filter(l => !l.tsMs || l.tsMs <= T);
+    if (!laps.length) return;                       // hasn't started yet: not on track
+    const last = laps[laps.length - 1];
+    teamData[num] = { ...t.meta, laps, stints: [[]] };
+    prevLapCount[num] = last.lap;
+    prevPitCount[num] = Number.isFinite(last.pits) ? last.pits : 0;
+    colorForTeam(num);
+  });
+  flagLog.length = 0;
+  replayFull.flagLog.forEach(f => { if (f.t <= T) flagLog.push(f); });
+  healStints();
+  // Same as rebuildGapHistory(), without its save/redraw side effects.
+  Object.entries(teamData).forEach(([num, td]) => {
+    gapHistory[num] = td.laps.map(l => ({ lap: l.lap, gap: null, t: l.tsMs || null }));
+  });
+  rawData = replaySnapshot(T);
+
+  // Keep the clock-time charts around the replay moment: a window left over
+  // from another part of the race would quietly show the wrong hours. One that
+  // already contains this moment (or follows the clock) is left alone.
+  Object.values(twStates).forEach(st => {
+    if (st.follow || (replayAt >= st.from && replayAt <= st.to)) return;
+    const w = st.to - st.from;
+    st.to = replayAt + TW_AHEAD;
+    st.from = Math.max(0, st.to - w);
+  });
+
+  // From here on it's exactly what a live poll renders.
+  document.getElementById('clock').textContent = eventClock(T, { second: '2-digit' });
+  document.getElementById('remaining').textContent = msToTime(rawData.TempsRestant);
+  document.getElementById('last-update').textContent = `replay ${rpFmt(replayAt)}`;
+  renderStandings(rawData);
+  buildTeamFilterBar();
+  applyAheadSelection();
+  renderCharts();
+  if (document.getElementById('tab-stints').classList.contains('active')) {
+    buildStintFilterBar(); renderStints(); renderPitForecast();
+  }
+  lsBuildLivePosMap();
+  if (document.getElementById('tab-livestanding').classList.contains('active')) {
+    if (lsInRaceMode) lsRenderTopInRace();
+    if (lsMsMode === 'live') { lsRenderMsLists(); lsRenderMsChart(); }
+  }
+  replayRenderBar();
+  replayRenderState();
+  try {
+    const saved = JSON.parse(localStorage.getItem(RP_KEY) || '{}');
+    saved[replayFull.key] = replayAt;
+    localStorage.setItem(RP_KEY, JSON.stringify(saved));
+  } catch (e) {}
+}
+
+// A feed-shaped classification for this moment: laps completed first, then who
+// crossed that lap earlier (a bike standing in the pits keeps its place until
+// the next one goes past it, exactly as timing scores it).
+function replaySnapshot(T) {
+  const win = replayFull.win;
+  const info = Object.entries(teamData).map(([num, td]) => {
+    const last = td.laps[td.laps.length - 1];
+    const times = td.laps.map(l => l.timeSec).filter(Boolean);
+    return { num, td, last, lapCount: last.lap, t: last.tsMs || 0, best: times.length ? Math.min(...times) : null };
+  }).sort((a, b) => b.lapCount - a.lapCount || a.t - b.t);
+  const catSeen = {}, catLeader = {};
+  info.forEach(x => { const c = x.td.cat || ''; if (!catLeader[c]) catLeader[c] = x; });
+  const gapTo = (x, ref) => {
+    if (!ref || ref.num === x.num) return '-';
+    const dL = ref.lapCount - x.lapCount;
+    return dL > 0 ? `${dL} Lp.` : ((x.t - ref.t) / 1000).toFixed(3);
+  };
+  const sect = v => (v == null ? '' : v.toFixed(3));
+  const rows = info.map((x, i) => {
+    const cat = x.td.cat || '';
+    catSeen[cat] = (catSeen[cat] || 0) + 1;
+    const st = (x.td.stints || []).filter(a => a.length);
+    const pits = Math.max(Number.isFinite(x.last.pits) ? x.last.pits : 0, st.length - 1);
+    const since = x.td.stints && x.td.stints.length ? stintLapCount(x.td.stints, x.td.stints.length - 1) : 0;
+    const r = new Array(RP_COLS.length).fill('');
+    r[1] = String(i + 1);
+    r[2] = String(catSeen[cat]);
+    r[3] = x.num;
+    r[4] = cat;
+    r[6] = x.td.name || '';
+    r[7] = x.last.rider || x.td.rider || '';
+    r[10] = sect(x.last.s1); r[11] = sect(x.last.s2); r[12] = sect(x.last.s3);
+    r[13] = x.last.timeStr || '';
+    r[14] = x.best == null ? '' : secToStr(x.best);
+    r[15] = gapTo(x, info[0]);
+    r[16] = gapTo(x, catLeader[cat]);
+    r[17] = String(x.lapCount);
+    r[18] = String(Math.max(0, pits));
+    r[19] = String(since);
+    return r;
+  });
+  const flag = replayFull.flagLog.filter(f => f.t <= T).slice(-1)[0]?.flag ?? 0;
+  return { Titre: replayFull.state.sessionTitle || 'Session', Drapeau: flag,
+           HeureJourUTC: new Date(T).toISOString(), TempsEcoule: T - win.start,
+           TempsRestant: Math.max(0, win.raceLen - (T - win.start)),
+           Colonnes: RP_COLS, Donnees: rows, Messages: [] };
+}
+
 // ── Sync through the Cloudflare relay ─────────────────────────
 // Every page recording the live session (localhost or GitHub Pages) uploads
 // its laps and flag changes every 30 s and downloads what other pages
@@ -5151,7 +5582,7 @@ async function buildTestRace() {
 const SYNC_URL = FEED_RELAY, SYNC_EVERY = 30000;
 let syncSession = null, syncSinceId = 0, syncPushed = new Set(), syncFlagCount = 0, syncBusy = false;
 function syncSessionId() {
-  if (TEST_MODE || VIEW_KEY || !rawData?.Titre || !activeSessionKey || activeSessionKey !== liveSessionKey()) return null;
+  if (TEST_MODE || VIEW_KEY || RACE_FILE || replayActive() || !rawData?.Titre || !activeSessionKey || activeSessionKey !== liveSessionKey()) return null;
   return activeSessionKey.replace(/^ewc_session_(\d{4}-\d{2}-\d{2})_\d{4}_/, '$1_');   // day + title: same on every page
 }
 function syncStatus(text, color) {
@@ -5319,6 +5750,28 @@ DEFAULT_ON.forEach(n => activeTeams.add(n));
     } catch (e) { console.error('Test race failed:', e); }
     return;
   }
+  if (RACE_FILE) {
+    // A race saved as a file (data/<name>.json): no feed, no saving, replayable.
+    try {
+      await loadTeamNames();
+      const { state, file } = await loadRaceFile(RACE_FILE);
+      activeSessionKey = file.key || `file:${RACE_FILE}`;
+      await buildSessionPicker();
+      document.getElementById('title').textContent = `${file.title || RACE_FILE} — saved race`;
+      document.getElementById('status-dot').style.background = '#38bdf8';
+      const bar = document.createElement('div');
+      bar.style.cssText = 'background:#0c3b5e;color:#bae6fd;padding:6px 16px;font-size:12px;display:flex;align-items:center;gap:12px';
+      bar.innerHTML = `<b>Saved race</b> — loaded from data/${RACE_FILE}.json, nothing is recorded here.
+        <a href="${location.pathname}" style="background:#16a34a;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none">← Back to live</a>`;
+      document.querySelector('header').after(bar);
+      replayInit(state, file.key || '');
+      buildStintFilterBar();
+    } catch (e) {
+      console.error('Race file load failed:', e);
+      document.getElementById('title').textContent = `Could not load data/${RACE_FILE}.json`;
+    }
+    return;
+  }
   if (VIEW_KEY) {
     // Read-only archive tab: show the chosen session, no live feed, no saving.
     try {
@@ -5334,7 +5787,7 @@ DEFAULT_ON.forEach(n => activeTeams.add(n));
       bar.innerHTML = `<b>Archive view</b> — this page is not recording the live session.
         <a href="${location.pathname}" style="background:#16a34a;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none">← Back to live</a>`;
       document.querySelector('header').after(bar);
-      rebuildGapHistory();
+      if (loadedState) replayInit(loadedState, VIEW_KEY); else rebuildGapHistory();
       buildStintFilterBar();
     } catch (e) { console.error('Archive view failed:', e); }
     return;

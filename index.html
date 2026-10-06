@@ -455,10 +455,10 @@
       <input type="number" id="gap-y-min-num" step="10" class="gap-y-num" oninput="gapYFromInput('min', this.value)">
       <span id="gap-y-min-label" style="font-size:11px;color:#aaa;width:44px">-6000s</span>
       <span style="font-size:11px;color:#555;white-space:nowrap;margin-left:8px">Max</span>
-      <input type="range" id="gap-y-max" min="0" max="600" value="60" step="10"
+      <input type="range" id="gap-y-max" min="0" max="6000" value="4000" step="10"
         style="flex:1;accent-color:#22c55e">
       <input type="number" id="gap-y-max-num" step="10" class="gap-y-num" oninput="gapYFromInput('max', this.value)">
-      <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+60s</span>
+      <span id="gap-y-max-label" style="font-size:11px;color:#aaa;width:44px">+4000s</span>
     </div>
     <div class="chart-wrap" style="height:680px"><canvas id="chart-gap"></canvas></div>
     <div class="tw-bar" data-tw="gap">
@@ -1773,8 +1773,8 @@ function renderGapChart() {
     document.getElementById('gap-y-min-label').textContent = '-6000s';
   }
   if (maxSlider && !maxSlider._userSet) {
-    maxSlider.value = 60;
-    document.getElementById('gap-y-max-label').textContent = '+60s';
+    maxSlider.value = 4000;   // default: a bike an hour behind still fits on the chart
+    document.getElementById('gap-y-max-label').textContent = '+4000s';
   }
   if (minSlider) minSlider.oninput = function() { this._userSet = true; gapYSync(); renderGapChart(); };
   if (maxSlider) maxSlider.oninput = function() { this._userSet = true; gapYSync(); renderGapChart(); };

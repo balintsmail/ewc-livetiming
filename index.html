@@ -5217,6 +5217,106 @@ const SF_FLAGS = { excluded: 1, prevShare: 2, corrected: 4 };
 // corrections, lap renumbering) belong to the data, not to the view.
 const SF_TEAM = ['name', 'rider', 'cat', 'pitAdjust', 'lapOffset', 'lapRenumbered', 'lapRenumbered2'];
 
+// ── How a saved race opens ────────────────────────────────────
+// A race file carries the view it was exported with — which teams are drawn,
+// the gap chart's reference, limits and pace window, the time windows — and a
+// browser applies that the first time it opens the file. From then on the view
+// belongs to the viewer: their own changes stick, and only a newer export of
+// the race offers a new default.
+const RACE_VIEW_KEY = 'race_view_v1';
+function chartsView() {
+  const el = id => document.getElementById(id);
+  return {
+    teams: [...activeTeams], gapTeams: [...gapSel], refTeam,
+    smooth: lineTension > 0,
+    avgWindow: parseInt(el('avg-window-slider-time')?.value) || 1,
+    catchLines: catchLinesOn,
+    gapPaceLaps: gapPaceLapsN,
+    ourPace: el('gap-ourpace-auto')?.checked ? null : gapOurPace,   // null = auto
+    gapY: { min: parseInt(el('gap-y-min')?.value), max: parseInt(el('gap-y-max')?.value) },
+    window: JSON.parse(JSON.stringify(twStates)),
+    lapSecTeams: [...lapSecTeams], lapSecRider,
+  };
+}
+// Two halves, because they answer to different owners. These settings live
+// nowhere but the page, so without the file they fall back to the generic
+// defaults every time it is opened. Set the controls only — whoever calls this
+// renders afterwards.
+function applyViewOnPage(v) {
+  const el = id => document.getElementById(id);
+  if (Array.isArray(v.teams) && v.teams.length) {
+    activeTeams = new Set(v.teams);
+    chartsSelTouched = chartsSelApplied = true;   // the file's selection, not "the bikes just ahead"
+  }
+  if (v.refTeam) refTeam = v.refTeam;
+  if (v.smooth !== undefined) {
+    lineTension = v.smooth ? 0.4 : 0;
+    el('line-style-smooth')?.classList.toggle('active', !!v.smooth);
+    el('line-style-straight')?.classList.toggle('active', !v.smooth);
+  }
+  if (v.avgWindow && el('avg-window-slider-time')) {
+    el('avg-window-slider-time').value = v.avgWindow;
+    el('avg-window-label-time').textContent = `${v.avgWindow} laps`;
+  }
+  ['min', 'max'].forEach(k => {
+    const n = v.gapY?.[k], sl = el(`gap-y-${k}`);
+    if (!Number.isFinite(n) || !sl) return;
+    if (n < +sl.min) sl.min = Math.floor(n / 10) * 10;
+    if (n > +sl.max) sl.max = Math.ceil(n / 10) * 10;
+    sl.value = n;
+    sl._userSet = true;                            // keep it off the automatic default
+  });
+  gapYSync();
+  if (Array.isArray(v.lapSecTeams) && v.lapSecTeams.length) {
+    lapSecTeams.clear();
+    v.lapSecTeams.forEach(n => lapSecTeams.add(n));
+  }
+  if (v.lapSecRider !== undefined) lapSecRider = v.lapSecRider;
+}
+// These the browser remembers on its own, so the file only ever seeds them.
+function applyViewStored(v) {
+  const el = id => document.getElementById(id);
+  if (Array.isArray(v.gapTeams) && v.gapTeams.length) { gapSel = new Set(v.gapTeams); gapSaveSel(); }
+  if (v.catchLines !== undefined) {
+    catchLinesOn = !!v.catchLines;
+    try { localStorage.setItem(CATCH_KEY, catchLinesOn ? '1' : '0'); } catch (e) {}
+    if (el('catch-lines')) el('catch-lines').checked = catchLinesOn;
+  }
+  if (v.gapPaceLaps >= 3) {
+    gapPaceLapsN = v.gapPaceLaps;
+    try { localStorage.setItem(GAP_PACE_KEY, String(gapPaceLapsN)); } catch (e) {}
+    if (el('gap-pace-laps')) el('gap-pace-laps').value = Math.min(gapPaceLapsN, +el('gap-pace-laps').max);
+    if (el('gap-pace-laps-num')) el('gap-pace-laps-num').value = gapPaceLapsN;
+  }
+  if (v.ourPace !== undefined) {
+    gapOurPace = v.ourPace || null;
+    gapSaveOurPace();
+    if (el('gap-ourpace-auto')) el('gap-ourpace-auto').checked = !gapOurPace;
+    if (gapOurPace && el('gap-ourpace')) el('gap-ourpace').value = gapOurPace;
+  }
+  if (v.window) {
+    Object.entries(v.window).forEach(([k, st]) => { if (twStates[k] && st) twStates[k] = { ...twStates[k], ...st }; });
+    twSave();
+  }
+}
+function applyChartsView(v) { if (v) { applyViewOnPage(v); applyViewStored(v); } }
+
+// Opening a saved race: its own view is the default. The page-only half is set
+// every time (nothing else holds it); the half the browser stores is seeded
+// once per export, so a viewer's own choices survive their next visit.
+function applyRaceView(file) {
+  if (!file?.view) return;
+  applyViewOnPage(file.view);
+  const id = file.key || file.title || '';
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(RACE_VIEW_KEY) || '{}'); } catch (e) {}
+  if (seen[id] === file.savedAt) return;            // this browser has been offered it already
+  applyViewStored(file.view);
+  seen[id] = file.savedAt;
+  try { localStorage.setItem(RACE_VIEW_KEY, JSON.stringify(seen)); } catch (e) {}
+  console.log("Applied the race file's own Charts view");
+}
+
 function packSession(state, key) {
   const ts = Object.values(state.teamData || {}).flatMap(td => (td.laps || []).map(l => l.tsMs || 0)).filter(Boolean);
   const t0 = ts.length ? Math.min(...ts) : 0;
@@ -5239,7 +5339,7 @@ function packSession(state, key) {
   });
   const { event, session } = splitEventSession(state.sessionTitle || '');
   return { format: SESSION_FILE_FORMAT, key: key || '', title: state.sessionTitle || '', event, session,
-           savedAt: state.savedAt || Date.now(), tz: eventTzOffsetMin, t0, lapFields: SF_LAP,
+           savedAt: state.savedAt || Date.now(), tz: eventTzOffsetMin, t0, lapFields: SF_LAP, view: chartsView(),
            flagLog: state.flagLog || [], feedBest: state.feedBest || {}, teamColors: state.teamColors || {}, teams };
 }
 
@@ -5301,6 +5401,7 @@ async function loadRaceFile(name) {
   if (Number.isFinite(file.tz)) eventTzOffsetMin = file.tz;
   const state = unpackSession(file);
   applySessionState(state);
+  applyRaceView(file);
   console.log(`Loaded race file ${name}: ${state.sessionTitle} (${Object.keys(state.teamData).length} teams)`);
   return { state, file };
 }
@@ -5334,6 +5435,7 @@ function importSessionFile(input) {
       if (!state.teamData || !Object.keys(state.teamData).length) throw new Error('no teams in that file');
       if (Number.isFinite(file.tz)) eventTzOffsetMin = file.tz;
       applySessionState(state);
+      applyRaceView(file);
       activeSessionKey = file.key || `file:${f.name}`;
       document.getElementById('title').textContent = `${state.sessionTitle || f.name} — loaded file`;
       replayInit(state, file.key || '');
@@ -5347,6 +5449,7 @@ function importSessionFile(input) {
 // serve.py, so a recorded race can be committed with the app.
 async function saveRaceFile(name) {
   const file = packSession(currentFullState(), activeSessionKey || '');
+  file.savedAt = Date.now();          // a fresh export offers its view as the new default
   const r = await fetch(`/save-data/${name || sessionFileName()}`, { method: 'POST', body: JSON.stringify(file) });
   const out = await r.json().catch(() => ({}));
   console.log('saveRaceFile:', r.status, out);
